@@ -3,11 +3,13 @@ import PrimeVue from 'primevue/config'
 import Aura from '@primeuix/themes/aura'
 
 import NewApp from './NewApp.vue'
+import { habilitarNotificacionesDeInterfaz } from './services/notificacionesNativas'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
 import './styles/integration-overrides.css'
 import './styles/resolution-layout-overrides.css'
+import './styles/evint-layout-overrides.css'
 
 const app = createApp(NewApp)
 
@@ -36,3 +38,4 @@ app.use(PrimeVue, {
 })
 
 app.mount('#app')
+habilitarNotificacionesDeInterfaz()
