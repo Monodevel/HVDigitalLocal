@@ -187,6 +187,7 @@ pub fn run() {
             backup::create_database_backup,
             backup::restore_database_backup,
         ])
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(
