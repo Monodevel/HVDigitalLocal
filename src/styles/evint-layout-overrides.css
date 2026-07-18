@@ -1,0 +1,42 @@
+/* EVINT: la navegación se realiza exclusivamente desde el menú lateral. */
+.hv-module-host .page:has(.matrix-wrap) .shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.hv-module-host .page:has(.matrix-wrap) .toolbar {
+  order: 100;
+  margin: 1rem 0 0;
+  padding: 1rem;
+  justify-content: flex-end;
+  border: 1px solid var(--hv-border);
+  border-radius: var(--hv-radius-md);
+  background: var(--hv-surface);
+  box-shadow: var(--hv-shadow-sm);
+}
+
+.hv-module-host .page:has(.matrix-wrap) .toolbar > .secondary:first-child {
+  display: none;
+}
+
+.hv-module-host .page:has(.matrix-wrap) .toolbar .actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+@media (max-width: 700px) {
+  .hv-module-host .page:has(.matrix-wrap) .toolbar .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hv-module-host .page:has(.matrix-wrap) .toolbar .actions button {
+    width: 100%;
+  }
+}
+
+@media print {
+  .hv-module-host .page:has(.matrix-wrap) .toolbar {
+    display: none !important;
+  }
+}
