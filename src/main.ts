@@ -1,5 +1,36 @@
-import { createApp } from "vue";
-import App from "./App.vue";
+import { createApp } from 'vue'
+import PrimeVue from 'primevue/config'
+import Aura from '@primeuix/themes/aura'
+
+import NewApp from './NewApp.vue'
+
+import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
 
-createApp(App).mount("#app");
+const app = createApp(NewApp)
+
+app.use(PrimeVue, {
+  theme: {
+    preset: Aura,
+    options: {
+      darkModeSelector: '.hv-dark-mode',
+      cssLayer: false,
+    },
+  },
+  ripple: true,
+  locale: {
+    accept: 'Aceptar',
+    reject: 'Cancelar',
+    choose: 'Seleccionar',
+    upload: 'Subir',
+    cancel: 'Cancelar',
+    today: 'Hoy',
+    clear: 'Limpiar',
+    firstDayOfWeek: 1,
+    dateFormat: 'dd/mm/yy',
+    emptyMessage: 'No existen registros disponibles',
+    emptyFilterMessage: 'No se encontraron resultados',
+  },
+})
+
+app.mount('#app')
