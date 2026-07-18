@@ -1,14 +1,9 @@
 <script setup lang="ts">
-import {
-  computed,
-  onMounted,
-  ref,
-  watch,
-} from 'vue'
-
-import AppLayout from '../../components/layout/AppLayout.vue'
-import AppCard from '../../components/ui/AppCard.vue'
-import PageActions from '../../components/ui/PageActions.vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import ProgressBar from 'primevue/progressbar'
+import Tag from 'primevue/tag'
 
 import {
   iniciarInstrumento,
@@ -29,9 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   volver: []
-  abrirInstrumento: [
-    instrumento: InstrumentoExpedienteDetalle,
-  ]
+  abrirInstrumento: [instrumento: InstrumentoExpedienteDetalle]
   abrirEvint: [instrumentoId: number]
   abrirHojaVida: [hojaVidaId: number]
   nuevaAnotacion: [hojaVidaId: number]
@@ -39,941 +32,677 @@ const emit = defineEmits<{
 
 const cargando = ref(true)
 const error = ref('')
-const menuAccionesAbierto = ref(false)
-
-const expediente =
-  ref<ExpedienteDetalle | null>(null)
-
-const instrumentos =
-  ref<InstrumentoExpedienteDetalle[]>([])
-
-const anotaciones =
-  ref<UltimaAnotacionExpediente[]>([])
+const expediente = ref<ExpedienteDetalle | null>(null)
+const instrumentos = ref<InstrumentoExpedienteDetalle[]>([])
+const anotaciones = ref<UltimaAnotacionExpediente[]>([])
 
 const progresoGeneral = computed(() => {
-  if (instrumentos.value.length === 0) {
-    return 0
-  }
+  if (instrumentos.value.length === 0) return 0
 
   const total = instrumentos.value.reduce(
-    (acumulado, instrumento) =>
-      acumulado +
-      instrumento.porcentaje_avance,
+    (acumulado, instrumento) => acumulado + instrumento.porcentaje_avance,
     0,
   )
 
-  return Math.round(
-    total / instrumentos.value.length,
-  )
+  return Math.round(total / instrumentos.value.length)
 })
 
 const iniciales = computed(() => {
-  const nombre =
-    expediente.value?.persona_nombre_completo ?? ''
+  const nombre = expediente.value?.persona_nombre_completo ?? ''
 
   return nombre
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map(parte => parte[0]?.toUpperCase() ?? '')
-    .join('')
+    .join('') || 'HV'
 })
+
+function etiquetaEstado(estado: string): string {
+  return estado
+    .replace(/_/g, ' ')
+    .toLocaleLowerCase('es')
+    .replace(/^./, letra => letra.toLocaleUpperCase('es'))
+}
+
+function severidadEstado(
+  estado: string,
+): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
+  const valor = estado.trim().toUpperCase()
+
+  if (['COMPLETADO', 'CERRADO', 'FINALIZADO'].includes(valor)) {
+    return 'success'
+  }
+
+  if (['EN_ELABORACION', 'BORRADOR', 'PENDIENTE', 'PENDIENTE_FIRMA'].includes(valor)) {
+    return 'warn'
+  }
+
+  if (['NO_INICIADO', 'ABIERTO', 'NO_REALIZADO'].includes(valor)) {
+    return 'info'
+  }
+
+  if (valor === 'NO_APLICA' || valor === 'ANULADO') {
+    return 'secondary'
+  }
+
+  return 'secondary'
+}
+
+function iconoInstrumento(tipo: string): string {
+  const valor = tipo.trim().toUpperCase()
+
+  if (valor === 'HOJA_VIDA') return 'pi pi-book'
+  if (valor === 'EVINT') return 'pi pi-chart-bar'
+  if (valor === 'HC1' || valor === 'HC2') return 'pi pi-clipboard'
+  if (valor === 'HAM') return 'pi pi-star'
+  if (valor === 'HAPSEM') return 'pi pi-heart'
+  return 'pi pi-file'
+}
 
 async function cargar(): Promise<void> {
   cargando.value = true
   error.value = ''
 
   try {
-    const [
-      expedienteResultado,
-      instrumentosResultado,
-      anotacionesResultado,
-    ] = await Promise.all([
-      obtenerExpedienteDetalle(
-        props.expedienteId,
-      ),
-      listarInstrumentosExpediente(
-        props.expedienteId,
-      ),
-      listarUltimasAnotacionesExpediente(
-        props.expedienteId,
-      ),
+    const [detalle, instrumentosResultado, anotacionesResultado] = await Promise.all([
+      obtenerExpedienteDetalle(props.expedienteId),
+      listarInstrumentosExpediente(props.expedienteId),
+      listarUltimasAnotacionesExpediente(props.expedienteId),
     ])
 
-    if (!expedienteResultado) {
-      throw new Error(
-        'No se encontró el expediente solicitado.',
-      )
+    if (!detalle) {
+      throw new Error('No se encontró el expediente solicitado.')
     }
 
-    expediente.value = expedienteResultado
+    expediente.value = detalle
     instrumentos.value = instrumentosResultado
     anotaciones.value = anotacionesResultado
   } catch (excepcion) {
-    error.value =
-      excepcion instanceof Error
-        ? excepcion.message
-        : String(excepcion)
+    error.value = excepcion instanceof Error
+      ? excepcion.message
+      : String(excepcion)
   } finally {
     cargando.value = false
   }
 }
 
-async function abrir(
-  instrumento: InstrumentoExpedienteDetalle,
-): Promise<void> {
-  if (
-    instrumento.aplica !== 1 ||
-    instrumento.estado === 'NO_APLICA'
-  ) {
-    return
-  }
+async function abrir(instrumento: InstrumentoExpedienteDetalle): Promise<void> {
+  if (instrumento.aplica !== 1 || instrumento.estado === 'NO_APLICA') return
 
   try {
-    await iniciarInstrumento(
-      instrumento.instrumento_id,
-    )
+    error.value = ''
+    await iniciarInstrumento(instrumento.instrumento_id)
 
-    const tipo =
-      instrumento.tipo_instrumento
-        .trim()
-        .toUpperCase()
+    const tipo = instrumento.tipo_instrumento.trim().toUpperCase()
 
     if (tipo === 'EVINT') {
-      emit(
-        'abrirEvint',
-        instrumento.instrumento_id,
-      )
+      emit('abrirEvint', instrumento.instrumento_id)
       return
     }
 
-    if (
-      tipo === 'HOJA_VIDA' ||
-      tipo === 'HOJA DE VIDA' ||
-      tipo === 'HV'
-    ) {
+    if (['HOJA_VIDA', 'HOJA DE VIDA', 'HV'].includes(tipo)) {
       if (!expediente.value?.hoja_vida_id) {
-        throw new Error(
-          'El expediente no tiene una Hoja de Vida asociada.',
-        )
+        throw new Error('El expediente no tiene una Hoja de Vida asociada.')
       }
 
-      emit(
-        'abrirHojaVida',
-        expediente.value.hoja_vida_id,
-      )
+      emit('abrirHojaVida', expediente.value.hoja_vida_id)
       return
     }
 
     emit('abrirInstrumento', instrumento)
   } catch (excepcion) {
-    error.value =
-      excepcion instanceof Error
-        ? excepcion.message
-        : String(excepcion)
+    error.value = excepcion instanceof Error
+      ? excepcion.message
+      : String(excepcion)
   }
 }
 
-function etiquetaEstado(
-  estado: string,
-): string {
-  return estado
-    .replace(/_/g, ' ')
-    .toLowerCase()
-    .replace(
-      /^\w/,
-      (letra: string) => letra.toUpperCase(),
-    )
-}
-
-function claseSemanticaEstado(
-  estado: string,
-): 'success' | 'warning' | 'danger' | 'neutral' {
-  const valor = estado
-    .trim()
-    .toUpperCase()
-
-  if (
-    valor === 'COMPLETADO' ||
-    valor === 'CERRADO' ||
-    valor === 'FINALIZADO'
-  ) {
-    return 'success'
-  }
-
-  if (
-    valor === 'EN_ELABORACION' ||
-    valor === 'BORRADOR' ||
-    valor === 'PENDIENTE' ||
-    valor === 'PENDIENTE_FIRMA'
-  ) {
-    return 'warning'
-  }
-
-  if (
-    valor === 'NO_INICIADO' ||
-    valor === 'ABIERTO' ||
-    valor === 'NO_REALIZADO'
-  ) {
-    return 'danger'
-  }
-
-  return 'neutral'
-}
-
-watch(
-  () => props.expedienteId,
-  cargar,
-)
-
-onMounted(cargar)
+watch(() => props.expedienteId, () => void cargar())
+onMounted(() => void cargar())
 </script>
 
 <template>
-  <AppLayout
-    title="Expediente del calificado"
-    subtitle="Gestión de instrumentos y antecedentes del calificado"
-    max-width="full"
-  >
-    <template #actions>
-      <PageActions
-        v-model:open="menuAccionesAbierto"
-      >
-        <template #primary>
-          <button
-            v-if="expediente"
-            class="hv-button hv-button-primary"
-            type="button"
-            @click="
-              emit(
-                'nuevaAnotacion',
-                expediente.hoja_vida_id,
-              )
-            "
-          >
-            Nueva anotación
-          </button>
-        </template>
+  <section class="hv-expediente-prime">
+    <div v-if="cargando" class="hv-expediente-loading">
+      <i class="pi pi-spin pi-spinner" />
+      <strong>Cargando expediente</strong>
+      <span>Consultando antecedentes e instrumentos…</span>
+    </div>
 
-        <button
-          type="button"
+    <template v-else>
+      <div v-if="error" class="hv-expediente-error">
+        <i class="pi pi-exclamation-triangle" />
+        <span>{{ error }}</span>
+        <Button
+          label="Reintentar"
+          icon="pi pi-refresh"
+          severity="secondary"
+          outlined
+          size="small"
           @click="cargar"
-        >
-          Actualizar
-        </button>
-
-        <button
-          type="button"
-          @click="emit('volver')"
-        >
-          Volver
-        </button>
-      </PageActions>
-    </template>
-
-    <template #notice>
-      <div
-        v-if="error"
-        class="notice notice--error"
-      >
-        {{ error }}
-      </div>
-    </template>
-
-    <template #summary>
-      <AppCard
-        v-if="!cargando && expediente"
-        padding="lg"
-      >
-        <div class="profile-summary">
-          <div class="profile-photo">
-            <span>{{ iniciales }}</span>
-            <small>Fotografía</small>
-          </div>
-
-          <div class="profile-data">
-            <span class="eyebrow">
-              Expediente de calificación
-            </span>
-
-            <h2>
-              {{
-                expediente
-                  .grado_calidad_abreviatura
-              }}
-              {{
-                expediente
-                  .persona_nombre_completo
-              }}
-            </h2>
-
-            <p>
-              {{ expediente.run }}
-              · {{ expediente.categoria_nombre }}
-              · {{ expediente.periodo_nombre }}
-            </p>
-
-            <div class="profile-meta">
-              <div>
-                <span>Unidad</span>
-                <strong>
-                  {{ expediente.unidad_nombre }}
-                </strong>
-              </div>
-
-              <div>
-                <span>Puesto</span>
-                <strong>
-                  {{ expediente.puesto }}
-                </strong>
-              </div>
-
-              <div>
-                <span>Expediente</span>
-                <strong>
-                  N.º {{ expediente.expediente_id }}
-                </strong>
-              </div>
-
-              <div>
-                <span>Estado general</span>
-                <strong class="state-general">
-                  {{ expediente.expediente_estado }}
-                </strong>
-              </div>
-            </div>
-          </div>
-        </div>
-      </AppCard>
-    </template>
-
-    <section
-      v-if="cargando"
-      class="loading-state"
-    >
-      Cargando expediente…
-    </section>
-
-    <template v-else-if="expediente">
-
-      <div class="summary-grid">
-        <AppCard padding="md">
-          <div class="summary-item">
-            <span>Vigencia</span>
-            <strong>
-              {{ expediente.fecha_inicio }}
-            </strong>
-            <small>
-              al {{ expediente.fecha_termino }}
-            </small>
-          </div>
-        </AppCard>
-
-        <AppCard padding="md">
-          <div class="summary-item">
-            <span>Calificador directo</span>
-            <strong>
-              {{ expediente.calificador_grado }}
-              {{
-                expediente
-                  .calificador_nombre_completo
-              }}
-            </strong>
-            <small>
-              {{ expediente.calificador_puesto }}
-            </small>
-          </div>
-        </AppCard>
-
-        <AppCard padding="md">
-          <div class="summary-item">
-            <span>Hoja de Vida</span>
-            <strong>
-              {{ expediente.total_anotaciones }}
-              anotación(es)
-            </strong>
-            <small>
-              {{ expediente.total_borradores }}
-              borrador(es)
-            </small>
-          </div>
-        </AppCard>
-
-        <AppCard padding="md">
-          <div class="summary-item">
-            <span>Avance general</span>
-            <strong>
-              {{ progresoGeneral }}%
-            </strong>
-
-            <div class="progress">
-              <span
-                :style="{
-                  width: `${progresoGeneral}%`,
-                }"
-              />
-            </div>
-          </div>
-        </AppCard>
+        />
       </div>
 
-      <AppCard
-        title="Instrumentos del expediente"
-        subtitle="Seleccione un instrumento para abrirlo o continuar su elaboración"
-        padding="lg"
-      >
-        <div
-          v-if="instrumentos.length === 0"
-          class="empty-state"
-        >
-          No existen instrumentos asociados.
-        </div>
+      <template v-if="expediente">
+        <header class="hv-expediente-heading">
+          <div>
+            <span class="hv-eyebrow">Expediente de calificación</span>
+            <h1>{{ expediente.grado_calidad_abreviatura }} {{ expediente.persona_nombre_completo }}</h1>
+            <p>{{ expediente.run }} · {{ expediente.categoria_nombre }} · {{ expediente.periodo_nombre }}</p>
+          </div>
 
-        <div
-          v-else
-          class="instrument-grid"
-        >
-          <button
-            v-for="instrumento in instrumentos"
-            :key="instrumento.instrumento_id"
-            class="instrument-card"
-            :class="
-              `instrument-card--${claseSemanticaEstado(
-                instrumento.estado,
-              )}`
-            "
-            type="button"
-            :disabled="
-              instrumento.aplica !== 1 ||
-              instrumento.estado === 'NO_APLICA'
-            "
-            @click="abrir(instrumento)"
-          >
-            <div class="instrument-card__icon">
-              {{
-                instrumento.nombre_instrumento
-                  .charAt(0)
-                  .toUpperCase()
-              }}
+          <div class="hv-expediente-actions">
+            <Button
+              label="Actualizar"
+              icon="pi pi-refresh"
+              severity="secondary"
+              outlined
+              @click="cargar"
+            />
+            <Button
+              label="Nueva anotación"
+              icon="pi pi-file-edit"
+              :disabled="!expediente.hoja_vida_id"
+              @click="emit('nuevaAnotacion', expediente.hoja_vida_id)"
+            />
+          </div>
+        </header>
+
+        <Card class="hv-expediente-profile-card">
+          <template #content>
+            <div class="hv-expediente-profile">
+              <div class="hv-expediente-avatar">{{ iniciales }}</div>
+
+              <div class="hv-expediente-profile-main">
+                <div class="hv-expediente-profile-title">
+                  <div>
+                    <strong>{{ expediente.grado_calidad_nombre }}</strong>
+                    <span>Expediente N.º {{ expediente.expediente_id }}</span>
+                  </div>
+                  <Tag
+                    :value="etiquetaEstado(expediente.expediente_estado)"
+                    :severity="severidadEstado(expediente.expediente_estado)"
+                  />
+                </div>
+
+                <div class="hv-expediente-meta-grid">
+                  <div>
+                    <span>Unidad</span>
+                    <strong>{{ expediente.unidad_nombre || 'Sin unidad' }}</strong>
+                  </div>
+                  <div>
+                    <span>Puesto</span>
+                    <strong>{{ expediente.puesto || 'Sin puesto' }}</strong>
+                  </div>
+                  <div>
+                    <span>Vigencia</span>
+                    <strong>{{ expediente.fecha_inicio }} — {{ expediente.fecha_termino }}</strong>
+                  </div>
+                  <div>
+                    <span>Hoja de Vida</span>
+                    <strong>{{ etiquetaEstado(expediente.hoja_vida_estado) }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </Card>
+
+        <section class="hv-expediente-summary-grid">
+          <Card>
+            <template #content>
+              <div class="hv-expediente-summary-item">
+                <i class="pi pi-user-edit" />
+                <div>
+                  <span>Calificador directo</span>
+                  <strong>{{ expediente.calificador_grado }} {{ expediente.calificador_nombre_completo }}</strong>
+                  <small>{{ expediente.calificador_puesto }}</small>
+                </div>
+              </div>
+            </template>
+          </Card>
+
+          <Card>
+            <template #content>
+              <div class="hv-expediente-summary-item">
+                <i class="pi pi-book" />
+                <div>
+                  <span>Anotaciones</span>
+                  <strong>{{ expediente.total_anotaciones }}</strong>
+                  <small>{{ expediente.total_borradores }} borrador(es)</small>
+                </div>
+              </div>
+            </template>
+          </Card>
+
+          <Card>
+            <template #content>
+              <div class="hv-expediente-summary-item hv-expediente-progress-item">
+                <i class="pi pi-chart-line" />
+                <div>
+                  <span>Avance general</span>
+                  <strong>{{ progresoGeneral }}%</strong>
+                  <ProgressBar :value="progresoGeneral" :show-value="false" />
+                </div>
+              </div>
+            </template>
+          </Card>
+        </section>
+
+        <Card class="hv-expediente-section-card">
+          <template #title>Instrumentos del expediente</template>
+          <template #subtitle>Seleccione un instrumento para abrirlo o continuar su elaboración.</template>
+          <template #content>
+            <div v-if="instrumentos.length === 0" class="hv-expediente-empty">
+              <i class="pi pi-folder-open" />
+              <strong>No existen instrumentos asociados</strong>
+              <span>El expediente aún no tiene instrumentos disponibles.</span>
             </div>
 
-            <div class="instrument-card__content">
-              <strong>
-                {{
-                  instrumento.nombre_instrumento
-                }}
-              </strong>
-
-              <span>
-                Formato
-                {{ instrumento.version_formato }}
-              </span>
-
-              <span
-                class="instrument-card__status"
+            <div v-else class="hv-expediente-instrument-grid">
+              <button
+                v-for="instrumento in instrumentos"
+                :key="instrumento.instrumento_id"
+                class="hv-expediente-instrument"
+                type="button"
+                :disabled="instrumento.aplica !== 1 || instrumento.estado === 'NO_APLICA'"
+                @click="abrir(instrumento)"
               >
-                {{
-                  etiquetaEstado(
-                    instrumento.estado,
-                  )
-                }}
-              </span>
+                <div class="hv-expediente-instrument-icon">
+                  <i :class="iconoInstrumento(instrumento.tipo_instrumento)" />
+                </div>
+
+                <div class="hv-expediente-instrument-copy">
+                  <div class="hv-expediente-instrument-title">
+                    <strong>{{ instrumento.nombre_instrumento }}</strong>
+                    <Tag
+                      :value="etiquetaEstado(instrumento.estado)"
+                      :severity="severidadEstado(instrumento.estado)"
+                    />
+                  </div>
+                  <span>Formato {{ instrumento.version_formato }}</span>
+                  <ProgressBar
+                    :value="instrumento.porcentaje_avance"
+                    :show-value="false"
+                  />
+                </div>
+
+                <div class="hv-expediente-instrument-action">
+                  <strong>{{ instrumento.porcentaje_avance }}%</strong>
+                  <i class="pi pi-chevron-right" />
+                </div>
+              </button>
+            </div>
+          </template>
+        </Card>
+
+        <Card class="hv-expediente-section-card">
+          <template #title>Últimas anotaciones</template>
+          <template #subtitle>Registros recientes asociados a la Hoja de Vida.</template>
+          <template #content>
+            <div v-if="anotaciones.length === 0" class="hv-expediente-empty hv-expediente-empty-compact">
+              <i class="pi pi-file-edit" />
+              <strong>No existen anotaciones registradas</strong>
+              <span>Puede comenzar creando una nueva anotación.</span>
             </div>
 
-            <small>
-              {{
-                instrumento
-                  .porcentaje_avance
-              }}%
-            </small>
-          </button>
-        </div>
-      </AppCard>
+            <div v-else class="hv-expediente-annotations">
+              <article
+                v-for="anotacion in anotaciones"
+                :key="anotacion.anotacion_id"
+                class="hv-expediente-annotation"
+                :class="{ 'hv-expediente-annotation-danger': anotacion.color_semantico === 'ROJO' }"
+              >
+                <div class="hv-expediente-annotation-date">
+                  <i class="pi pi-calendar" />
+                  <span>{{ anotacion.fecha_anotacion }}</span>
+                </div>
 
-      <div class="lower-grid">
-        <AppCard
-          title="Hoja de Vida"
-          subtitle="Acceso rápido a las anotaciones del período"
-          padding="lg"
-        >
-          <div class="quick-actions">
-            <button
-              class="hv-button hv-button-secondary"
-              type="button"
-              @click="
-                emit(
-                  'abrirHojaVida',
-                  expediente.hoja_vida_id,
-                )
-              "
-            >
-              Abrir Hoja de Vida
-            </button>
-
-            <button
-              class="hv-button hv-button-primary"
-              type="button"
-              @click="
-                emit(
-                  'nuevaAnotacion',
-                  expediente.hoja_vida_id,
-                )
-              "
-            >
-              Nueva anotación
-            </button>
-          </div>
-        </AppCard>
-
-        <AppCard
-          title="Actividad reciente"
-          subtitle="Últimas anotaciones estampadas"
-          padding="lg"
-        >
-          <div
-            v-if="anotaciones.length === 0"
-            class="empty-state"
-          >
-            No existen anotaciones estampadas.
-          </div>
-
-          <div
-            v-else
-            class="timeline"
-          >
-            <article
-              v-for="anotacion in anotaciones"
-              :key="anotacion.anotacion_id"
-              class="timeline-item"
-            >
-              <span
-                class="timeline-dot"
-                :class="
-                  anotacion
-                    .color_semantico
-                    .toLowerCase()
-                "
-              />
-
-              <div>
-                <small>
-                  {{ anotacion.fecha_anotacion }}
-                </small>
-
-                <strong
-                  :style="{
-                    color: anotacion.color_hex,
-                  }"
-                >
-                  {{ anotacion.titulo_final }}
-                </strong>
-
-                <span
-                  v-if="
-                    anotacion.concepto_nombre
-                  "
-                >
-                  Concepto
-                  {{ anotacion.concepto_numero }}
-                  ·
-                  {{
-                    anotacion.concepto_nombre
-                  }}
-                </span>
-
-                <span
-                  v-if="
-                    anotacion.puntaje_visual
-                  "
-                >
-                  {{ anotacion.puntaje_visual }}
-                </span>
-              </div>
-            </article>
-          </div>
-        </AppCard>
-      </div>
+                <div class="hv-expediente-annotation-copy">
+                  <div>
+                    <strong>{{ anotacion.titulo_final }}</strong>
+                    <Tag
+                      :value="etiquetaEstado(anotacion.estado)"
+                      :severity="severidadEstado(anotacion.estado)"
+                    />
+                  </div>
+                  <p>{{ anotacion.cuerpo_final }}</p>
+                  <small v-if="anotacion.concepto_nombre || anotacion.puntaje_visual">
+                    {{ anotacion.concepto_nombre ?? 'Sin concepto' }}
+                    <template v-if="anotacion.puntaje_visual"> · {{ anotacion.puntaje_visual }}</template>
+                  </small>
+                </div>
+              </article>
+            </div>
+          </template>
+        </Card>
+      </template>
     </template>
-  </AppLayout>
+  </section>
 </template>
 
 <style scoped>
-.notice {
-  padding: 10px 12px;
-  color: #b4232d;
-  background: #fff0f1;
-  border: 1px solid #facdd0;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.loading-state,
-.empty-state {
-  min-height: 160px;
+.hv-expediente-prime {
+  min-height: 100%;
+  padding: 1.35rem;
   display: grid;
-  place-items: center;
-  color: #64748b;
-  text-align: center;
-  font-size: 13px;
+  align-content: start;
+  gap: 1rem;
+  background: var(--hv-page);
 }
 
-.profile-summary {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 18px;
-  align-items: center;
-}
-
-.profile-photo {
-  width: 78px;
-  height: 92px;
+.hv-expediente-loading,
+.hv-expediente-empty {
+  min-height: 260px;
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 5px;
-  color: #155bd6;
-  background: #eef4ff;
-  border: 1px solid #d9e6ff;
-  border-radius: 10px;
+  gap: .6rem;
+  color: var(--hv-muted);
+  text-align: center;
 }
 
-.profile-photo span {
-  font-size: 22px;
-  font-weight: 820;
+.hv-expediente-loading i,
+.hv-expediente-empty i {
+  color: var(--hv-primary);
+  font-size: 1.8rem;
 }
 
-.profile-photo small {
-  color: #64748b;
-  font-size: 10.5px;
+.hv-expediente-loading strong,
+.hv-expediente-empty strong {
+  color: var(--hv-text);
 }
 
-.eyebrow {
-  display: block;
-  color: #155bd6;
-  font-size: 10.5px;
-  font-weight: 760;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
+.hv-expediente-error {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  border: 1px solid #fecaca;
+  border-radius: var(--hv-radius-md);
+  color: #991b1b;
+  background: #fef2f2;
 }
 
-.profile-data h2 {
-  margin: 5px 0 4px;
-  color: #111827;
-  font-size: 21px;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  font-weight: 760;
+.hv-expediente-error span { flex: 1; }
+
+.hv-expediente-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.profile-data > p {
-  margin: 0;
-  color: #64748b;
-  font-size: 12.5px;
-  line-height: 1.4;
+.hv-expediente-heading h1 {
+  margin: .25rem 0 0;
+  font-size: clamp(1.55rem, 2.5vw, 2rem);
+  letter-spacing: -.035em;
 }
 
-.profile-meta {
-  margin-top: 14px;
+.hv-expediente-heading p {
+  margin: .45rem 0 0;
+  color: var(--hv-muted);
+}
+
+.hv-expediente-actions {
+  display: flex;
+  gap: .65rem;
+  flex-wrap: wrap;
+}
+
+.hv-expediente-profile-card,
+.hv-expediente-section-card,
+.hv-expediente-summary-grid :deep(.p-card) {
+  border: 1px solid var(--hv-border);
+  box-shadow: var(--hv-shadow-sm);
+}
+
+.hv-expediente-profile {
   display: grid;
-  grid-template-columns:
-    repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1.1rem;
+  align-items: center;
 }
 
-.profile-meta > div,
-.summary-item {
+.hv-expediente-avatar {
+  width: 76px;
+  height: 76px;
   display: grid;
-  gap: 4px;
+  place-items: center;
+  border-radius: 20px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--hv-primary), var(--hv-primary-dark-2));
+  font-size: 1.35rem;
+  font-weight: 850;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, .2);
 }
 
-.profile-meta > div {
-  min-height: 54px;
-  padding: 9px 10px;
-  box-sizing: border-box;
-  background: #fbfdff;
-  border: 1px solid #edf1f6;
-  border-radius: 8px;
+.hv-expediente-profile-main { min-width: 0; }
+
+.hv-expediente-profile-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
-.profile-meta span,
-.summary-item span,
-.summary-item small {
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.35;
+.hv-expediente-profile-title > div {
+  display: grid;
+  gap: .25rem;
 }
 
-.profile-meta strong,
-.summary-item strong {
-  overflow: hidden;
-  color: #111827;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  font-weight: 740;
-}
+.hv-expediente-profile-title strong { font-size: 1rem; }
+.hv-expediente-profile-title span { color: var(--hv-muted); font-size: .83rem; }
 
-.state-general {
-  width: fit-content;
-  padding: 3px 8px;
-  color: #0f8f5a !important;
-  background: #e7f7ef;
-  border-radius: 999px;
-  font-size: 11px !important;
-  font-weight: 760 !important;
-}
-
-.summary-grid {
-  margin-bottom: 14px;
+.hv-expediente-meta-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: .8rem;
 }
 
-.summary-item {
-  min-height: 54px;
+.hv-expediente-meta-grid > div {
+  display: grid;
+  gap: .25rem;
+  min-width: 0;
 }
 
-.progress {
-  height: 6px;
-  margin-top: 5px;
+.hv-expediente-meta-grid span,
+.hv-expediente-summary-item span {
+  color: var(--hv-muted);
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.hv-expediente-meta-grid strong {
   overflow: hidden;
-  background: #edf1f6;
-  border-radius: 999px;
+  text-overflow: ellipsis;
+  font-size: .88rem;
 }
 
-.progress span {
-  height: 100%;
-  display: block;
-  background: #155bd6;
-  border-radius: inherit;
-}
-
-.instrument-grid {
+.hv-expediente-summary-grid {
   display: grid;
-  grid-template-columns:
-    repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .8rem;
 }
 
-.instrument-card {
-  min-height: 82px;
-  padding: 12px;
+.hv-expediente-summary-item {
+  min-height: 86px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
-  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  color: #111827;
-  background: #ffffff;
-  border: 1px solid #dbe3ef;
-  border-radius: 9px;
-  text-align: left;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.025);
-  transition:
-    transform 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    background-color 120ms ease;
-  cursor: pointer;
+  gap: .8rem;
 }
 
-.instrument-card:hover:not(:disabled) {
-  background: #fbfdff;
-  border-color: #9fb9e6;
-  box-shadow: 0 8px 18px rgba(21, 91, 214, 0.06);
+.hv-expediente-summary-item > i {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--hv-primary);
+  background: var(--hv-primary-soft);
+}
+
+.hv-expediente-summary-item > div {
+  display: grid;
+  gap: .25rem;
+  min-width: 0;
+}
+
+.hv-expediente-summary-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: .95rem;
+}
+
+.hv-expediente-summary-item small { color: var(--hv-muted); }
+.hv-expediente-progress-item :deep(.p-progressbar) { height: 7px; }
+
+.hv-expediente-instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: .8rem;
+}
+
+.hv-expediente-instrument {
+  width: 100%;
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .85rem;
+  padding: .95rem;
+  border: 1px solid var(--hv-border);
+  border-radius: 12px;
+  color: var(--hv-text);
+  background: #fff;
+  text-align: left;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.hv-expediente-instrument:hover:not(:disabled) {
+  border-color: #9dbcfb;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, .09);
   transform: translateY(-1px);
 }
 
-.instrument-card:disabled {
+.hv-expediente-instrument:disabled {
+  opacity: .55;
   cursor: not-allowed;
-  opacity: 0.62;
 }
 
-.instrument-card__icon {
-  width: 38px;
-  height: 38px;
+.hv-expediente-instrument-icon {
+  width: 46px;
+  height: 46px;
   display: grid;
   place-items: center;
-  color: #155bd6;
-  background: #eef4ff;
-  border: 1px solid #d9e6ff;
-  border-radius: 9px;
-  font-size: 15px;
-  font-weight: 800;
+  border-radius: 12px;
+  color: var(--hv-primary);
+  background: var(--hv-primary-soft);
+  font-size: 1.1rem;
 }
 
-.instrument-card__content {
+.hv-expediente-instrument-copy {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: .55rem;
 }
 
-.instrument-card__content strong {
-  overflow: hidden;
-  color: #111827;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 760;
-}
-
-.instrument-card__content span {
-  color: #64748b;
-  font-size: 11px;
-}
-
-.instrument-card__status {
-  width: fit-content;
-  padding: 3px 7px;
-  border-radius: 999px;
-  font-size: 10.5px !important;
-  font-weight: 760;
-}
-
-.instrument-card > small {
-  justify-self: end;
-  width: fit-content;
-  padding: 4px 7px;
-  color: #334155;
-  background: #eef2f7;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 760;
-}
-
-.instrument-card--success .instrument-card__status {
-  color: #0f8f5a;
-  background: #e7f7ef;
-}
-
-.instrument-card--warning .instrument-card__status {
-  color: #a36700;
-  background: #fff6df;
-}
-
-.instrument-card--danger .instrument-card__status {
-  color: #b4232d;
-  background: #fff0f1;
-}
-
-.instrument-card--neutral .instrument-card__status {
-  color: #475569;
-  background: #eef2f7;
-}
-
-.lower-grid {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: minmax(320px, 0.82fr) minmax(420px, 1.18fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.quick-actions {
+.hv-expediente-instrument-title {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
 }
 
-.quick-actions .hv-button {
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 740;
+.hv-expediente-instrument-copy > span {
+  color: var(--hv-muted);
+  font-size: .78rem;
 }
 
-.timeline {
-  position: relative;
+.hv-expediente-instrument-copy :deep(.p-progressbar) { height: 6px; }
+
+.hv-expediente-instrument-action {
   display: grid;
-  gap: 10px;
+  justify-items: end;
+  gap: .45rem;
+  color: var(--hv-muted);
 }
 
-.timeline::before {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 6px;
-  width: 1px;
-  content: '';
-  background: #dbe3ef;
+.hv-expediente-instrument-action strong {
+  color: var(--hv-text);
+  font-size: .85rem;
 }
 
-.timeline-item {
-  position: relative;
+.hv-expediente-empty-compact { min-height: 180px; }
+
+.hv-expediente-annotations {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 8px;
+  gap: .75rem;
 }
 
-.timeline-dot {
-  width: 11px;
-  height: 11px;
-  margin-top: 3px;
-  display: block;
-  background: #94a3b8;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  box-shadow: 0 0 0 1px #dbe3ef;
-  z-index: 1;
-}
-
-.timeline-dot.verde,
-.timeline-dot.green {
-  background: #17a56b;
-}
-
-.timeline-dot.rojo,
-.timeline-dot.red {
-  background: #dc5656;
-}
-
-.timeline-dot.azul,
-.timeline-dot.blue {
-  background: #155bd6;
-}
-
-.timeline-item div {
-  min-width: 0;
+.hv-expediente-annotation {
   display: grid;
-  gap: 3px;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 1rem;
+  padding: .9rem;
+  border: 1px solid var(--hv-border);
+  border-left: 4px solid var(--hv-primary);
+  border-radius: 10px;
+  background: #fff;
 }
 
-.timeline-item small {
-  color: #64748b;
-  font-size: 10.5px;
+.hv-expediente-annotation-danger { border-left-color: var(--hv-danger); }
+
+.hv-expediente-annotation-date {
+  display: flex;
+  align-items: flex-start;
+  gap: .45rem;
+  color: var(--hv-muted);
+  font-size: .8rem;
 }
 
-.timeline-item strong {
+.hv-expediente-annotation-copy { min-width: 0; }
+
+.hv-expediente-annotation-copy > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .8rem;
+}
+
+.hv-expediente-annotation-copy p {
+  margin: .45rem 0;
+  color: #475467;
+  font-size: .86rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  font-weight: 760;
 }
 
-.timeline-item span:not(.timeline-dot) {
-  color: #475569;
-  font-size: 11.5px;
-  line-height: 1.35;
+.hv-expediente-annotation-copy small { color: var(--hv-muted); }
+
+@media (max-width: 1050px) {
+  .hv-expediente-meta-grid { grid-template-columns: 1fr 1fr; }
+  .hv-expediente-summary-grid { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 1100px) {
-  .profile-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .profile-meta,
-  .summary-grid,
-  .lower-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .instrument-grid {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 720px) {
+  .hv-expediente-prime { padding: 1rem; }
+  .hv-expediente-heading,
+  .hv-expediente-profile-title { flex-direction: column; }
+  .hv-expediente-actions { width: 100%; }
+  .hv-expediente-actions :deep(.p-button) { flex: 1; }
+  .hv-expediente-profile { grid-template-columns: 1fr; }
+  .hv-expediente-avatar { width: 58px; height: 58px; border-radius: 15px; }
+  .hv-expediente-meta-grid { grid-template-columns: 1fr; }
+  .hv-expediente-instrument-grid { grid-template-columns: 1fr; }
+  .hv-expediente-annotation { grid-template-columns: 1fr; }
 }
 </style>
