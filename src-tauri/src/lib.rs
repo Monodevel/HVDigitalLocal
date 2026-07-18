@@ -6,6 +6,14 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    /*
+     * Las versiones son identificadores históricos persistidos por
+     * tauri-plugin-sql. No deben renumerarse después de una publicación.
+     *
+     * Los saltos existentes corresponden a propuestas reemplazadas antes de
+     * formar parte del registro activo. Los archivos marcados como
+     * `_OBSOLETA` o `_NO_APLICAR` se conservan únicamente como referencia.
+     */
     let migrations = vec![
         Migration {
             version: 1,
@@ -129,7 +137,7 @@ pub fn run() {
         },
         Migration {
             version: 19,
-            description: "corregir_escala_y_calculo_evint",
+            description: "corregir_escala_y_crear_resultados_concepto_evint",
             sql: include_str!("../migrations/020_corregir_escala_calculo_evint.sql"),
             kind: MigrationKind::Up,
         },
@@ -153,23 +161,22 @@ pub fn run() {
         },
         Migration {
             version: 23,
-            description: "crear_resoluciones_documentales",
+            description: "vincular_resolucion_documental_con_anotacion",
             sql: include_str!("../migrations/024_vinculo_resolucion_documental_anotacion.sql"),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 24,
-            description: "hc2_calificaciones",
+            description: "crear_calificaciones_hc2",
             sql: include_str!("../migrations/025_hc2_calificaciones.sql"),
             kind: MigrationKind::Up,
         },
         Migration {
             version: 25,
-            description: "hc1_ham_hapsem",
+            description: "crear_documentos_hc1_ham_hapsem",
             sql: include_str!("../migrations/026_hc1_ham_hapsem.sql"),
             kind: MigrationKind::Up,
         },
-
     ];
 
     tauri::Builder::default()
@@ -186,6 +193,7 @@ pub fn run() {
                 .separator()
                 .text("menu_salir", "Salir de HVDigital")
                 .build()?;
+
             let menu_archivo = SubmenuBuilder::new(app, "Archivo")
                 .text("menu_panel", "Panel principal")
                 .separator()
@@ -211,6 +219,7 @@ pub fn run() {
                 .text("menu_nueva_anotacion", "Nueva anotación")
                 .text("menu_ver_hoja_vida", "Ver anotaciones")
                 .build()?;
+
             let menu_resoluciones = SubmenuBuilder::new(app, "Resoluciones")
                 .text("menu_resoluciones", "Ver resoluciones")
                 .text("menu_nueva_resolucion", "Nueva resolución")
@@ -246,6 +255,7 @@ pub fn run() {
                     &menu_ayuda,
                 ])
                 .build()?;
+
             app.set_menu(menu)?;
 
             app.on_menu_event(move |app_handle, event| {
@@ -255,17 +265,18 @@ pub fn run() {
                     "menu_salir" | "menu_salir_archivo" => {
                         app_handle.exit(0);
                     }
-
-                    /*
-                     * El resto se envía a Vue.
-                     */
                     _ => {
-                        if let Err(error) = app_handle.emit("hvdigital-menu", menu_id.to_string()) {
-                            eprintln!("No fue posible emitir el evento del menú: {error}");
+                        if let Err(error) =
+                            app_handle.emit("hvdigital-menu", menu_id.to_string())
+                        {
+                            eprintln!(
+                                "No fue posible emitir el evento del menú: {error}"
+                            );
                         }
                     }
                 }
             });
+
             Ok(())
         })
         .run(tauri::generate_context!())
