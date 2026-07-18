@@ -25,21 +25,20 @@
 }
 
 /*
- * Centra cada nombre de escala sobre la misma columna que contiene su radio.
- * El posicionamiento absoluto evita que las etiquetas largas se desplacen
- * hacia la fila de conceptos o queden corridas respecto de sus controles.
+ * Las escalas deben permanecer centradas sobre su columna y alineadas
+ * verticalmente dentro del encabezado de la matriz.
  */
 .hv-module-host .page:has(.matrix-wrap) .matrix .scale {
   position: relative;
-  width: 52px;
-  min-width: 52px;
+  width: 53px;
+  min-width: 53px;
   height: 116px;
   padding: 0;
-  overflow: hidden;
   vertical-align: middle;
+  overflow: hidden;
 }
 
-.hv-module-host .page:has(.matrix-wrap) .matrix .scale span {
+.hv-module-host .page:has(.matrix-wrap) .matrix .scale > span {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -47,25 +46,35 @@
   margin: 0;
   transform: translate(-50%, -50%) rotate(-90deg);
   transform-origin: center;
-  color: #475569;
-  font-size: 10px;
-  font-weight: 760;
+  white-space: nowrap;
   line-height: 1;
   text-align: center;
-  white-space: nowrap;
 }
 
 .hv-module-host .page:has(.matrix-wrap) .matrix .choice {
-  width: 52px;
-  min-width: 52px;
-  padding: 7px 0;
+  width: 53px;
+  min-width: 53px;
+  padding: 6px 0;
   text-align: center;
   vertical-align: middle;
 }
 
-.hv-module-host .page:has(.matrix-wrap) .matrix .choice input {
-  display: block;
-  margin: 0 auto;
+/* Numeración correlativa global: no se reinicia al cambiar de concepto. */
+.hv-module-host .page:has(.matrix-wrap) .matrix {
+  counter-reset: descriptor-evint;
+}
+
+.hv-module-host .page:has(.matrix-wrap) .matrix tbody tr:not(.concept-row) {
+  counter-increment: descriptor-evint;
+}
+
+.hv-module-host .page:has(.matrix-wrap) .matrix tbody tr:not(.concept-row) td.descriptor > strong {
+  font-size: 0;
+}
+
+.hv-module-host .page:has(.matrix-wrap) .matrix tbody tr:not(.concept-row) td.descriptor > strong::before {
+  content: counter(descriptor-evint) ".";
+  font-size: 11px;
 }
 
 @media (max-width: 700px) {
