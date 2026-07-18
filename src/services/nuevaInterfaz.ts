@@ -52,14 +52,47 @@ export async function listarPeriodosUi(): Promise<PeriodoUi[]> {
 }
 
 export async function seleccionarPeriodoUi(periodoId: number): Promise<void> {
+  if (!Number.isInteger(periodoId) || periodoId <= 0) {
+    throw new Error('El identificador del período seleccionado no es válido.')
+  }
+
   const db = await obtenerBaseDatos()
-  await db.execute(
-    'UPDATE configuracion SET periodo_activo_id = ? WHERE id = 1',
+
+  const periodos = await db.select<Array<{ id: number }>>(
+    `
+      SELECT id
+      FROM periodos
+      WHERE id = $1
+      LIMIT 1
+    `,
     [periodoId],
   )
+
+  if (!periodos[0]) {
+    throw new Error('El período seleccionado ya no existe en la base de datos.')
+  }
+
+  const resultado = await db.execute(
+    `
+      UPDATE configuracion_inicial
+      SET
+        periodo_activo_id = $1,
+        actualizado_en = CURRENT_TIMESTAMP
+      WHERE id = 1
+    `,
+    [periodoId],
+  )
+
+  if (resultado.rowsAffected === 0) {
+    throw new Error('No existe la configuración inicial de HVDigital.')
+  }
 }
 
 export async function listarCalificadosUi(periodoId: number): Promise<CalificadoUi[]> {
+  if (!Number.isInteger(periodoId) || periodoId <= 0) {
+    throw new Error('El identificador del período no es válido.')
+  }
+
   const db = await obtenerBaseDatos()
 
   const filas = await db.select<Array<{
@@ -98,9 +131,9 @@ export async function listarCalificadosUi(periodoId: number): Promise<Calificado
       ON cp.id = d.calidad_personal_id_inicio
     LEFT JOIN expediente_hojas_vida ehv
       ON ehv.expediente_id = ex.id
-    WHERE ex.periodo_id = ?
-      AND UPPER(ex.estado) <> 'ANULADO'
-      AND UPPER(d.estado) <> 'ANULADA'
+    WHERE ex.periodo_id = $1
+      AND UPPER(COALESCE(ex.estado, 'ABIERTO')) <> 'ANULADO'
+      AND UPPER(COALESCE(d.estado, 'ACTIVA')) <> 'ANULADA'
     ORDER BY
       COALESCE(g.orden, 9999),
       COALESCE(cp.orden, 9999),
