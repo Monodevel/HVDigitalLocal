@@ -10,7 +10,32 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 
 import ConfiguracionInicialView from './views/Configuracion/ConfiguracionInicialView.vue'
+import ConfiguracionSistemaView from './views/Configuracion/ConfiguracionSistemaView.vue'
+import DesignacionCalificadosView from './views/Personal/DesignacionCalificadosView.vue'
+import ExpedienteDetalleView from './views/Expedientes/ExpedienteDetalleView.vue'
+import FormularioAnotacionView from './views/Anotaciones/FormularioAnotacionView.vue'
+import HojaVidaView from './views/HojaVida/HojaVidaView.vue'
+import EvintView from './views/Evint/EvintView.vue'
+import Hc1View from './views/Hc1/Hc1View.vue'
+import Hc2View from './views/hc2/Hc2View.vue'
+import HamView from './views/Ham/HamView.vue'
+import HapsemView from './views/Hapsem/HapsemView.vue'
+import ResolucionesView from './views/Resoluciones/ResolucionesView.vue'
+import ResolucionFormularioView from './views/Resoluciones/ResolucionFormularioView.vue'
+
 import { obtenerEstadoConfiguracionInicial } from './services/configuracionInicial'
+import {
+  listarCalificadosUi,
+  listarPeriodosUi,
+  seleccionarPeriodoUi,
+  type CalificadoUi,
+  type PeriodoUi,
+} from './services/nuevaInterfaz'
+import {
+  obtenerExpedienteDetalle,
+  obtenerInstrumentoExpediente,
+} from './services/expedienteDetalle'
+import type { InstrumentoExpedienteDetalle } from './types/expedienteDetalle'
 
 type Pantalla =
   | 'CARGANDO'
@@ -18,32 +43,18 @@ type Pantalla =
   | 'CONFIGURACION_INICIAL'
   | 'SELECCION_PERIODO'
   | 'CALIFICADOS'
+  | 'DESIGNACION'
   | 'EXPEDIENTE'
-
-type Periodo = {
-  id: number
-  nombre: string
-  estado: 'ABIERTO' | 'CERRADO'
-  fechaInicio: string
-  fechaTermino: string
-}
-
-type Calificado = {
-  id: number
-  grado: string
-  nombre: string
-  run: string
-  unidad: string
-  estado: 'ACTIVO' | 'INACTIVO'
-}
-
-type Instrumento = {
-  id: string
-  nombre: string
-  descripcion: string
-  icono: string
-  estado: 'COMPLETADO' | 'EN_PROCESO' | 'PENDIENTE' | 'DISPONIBLE'
-}
+  | 'HOJA_VIDA'
+  | 'ANOTACION'
+  | 'EVINT'
+  | 'HC1'
+  | 'HC2'
+  | 'HAM'
+  | 'HAPSEM'
+  | 'RESOLUCIONES'
+  | 'RESOLUCION_FORMULARIO'
+  | 'CONFIGURACION'
 
 const versionAplicacion = '0.1.0'
 const pantalla = ref<Pantalla>('CARGANDO')
@@ -51,130 +62,109 @@ const usuario = ref('')
 const contrasena = ref('')
 const recordarSesion = ref(false)
 const errorLogin = ref('')
+const errorCarga = ref('')
 const baseDatosConectada = ref(false)
-const periodoSeleccionado = ref<Periodo | null>(null)
-const calificadoSeleccionado = ref<Calificado | null>(null)
-const seccionExpediente = ref('instrumentos')
+const periodos = ref<PeriodoUi[]>([])
+const calificados = ref<CalificadoUi[]>([])
+const periodoSeleccionado = ref<PeriodoUi | null>(null)
+const calificadoSeleccionado = ref<CalificadoUi | null>(null)
+const instrumentoEvintSeleccionadoId = ref<number | null>(null)
+const resolucionSeleccionadaId = ref<number | null>(null)
 const menuActivo = ref('calificados')
 const textoBusqueda = ref('')
 const filtroGrado = ref<string | null>(null)
 const filtroUnidad = ref<string | null>(null)
+const cargandoDatos = ref(false)
 
-const periodos = ref<Periodo[]>([
-  {
-    id: 1,
-    nombre: 'Período de Calificaciones 2026–2027',
-    estado: 'ABIERTO',
-    fechaInicio: '01/05/2026',
-    fechaTermino: '30/04/2027',
-  },
-  {
-    id: 2,
-    nombre: 'Período de Calificaciones 2025–2026',
-    estado: 'CERRADO',
-    fechaInicio: '01/05/2025',
-    fechaTermino: '30/04/2026',
-  },
-  {
-    id: 3,
-    nombre: 'Período de Calificaciones 2024–2025',
-    estado: 'CERRADO',
-    fechaInicio: '01/05/2024',
-    fechaTermino: '30/04/2025',
-  },
-])
+const modoSoloLectura = computed(
+  () => periodoSeleccionado.value?.estado === 'CERRADO',
+)
 
-const calificados = ref<Calificado[]>([
-  { id: 1, grado: 'Sargento 1°', nombre: 'Juan Pérez Soto', run: '16.123.456-7', unidad: 'U.A. Logística', estado: 'ACTIVO' },
-  { id: 2, grado: 'Cabo 1°', nombre: 'María González Ríos', run: '17.654.321-0', unidad: 'U.A. Operaciones', estado: 'ACTIVO' },
-  { id: 3, grado: 'Cabo', nombre: 'Carlos Ramírez Díaz', run: '18.234.567-1', unidad: 'U.A. Comunicaciones', estado: 'ACTIVO' },
-  { id: 4, grado: 'Soldado 1°', nombre: 'Ana Torres Muñoz', run: '19.345.678-2', unidad: 'U.A. Sanidad', estado: 'ACTIVO' },
-  { id: 5, grado: 'Soldado', nombre: 'Luis Fernández Vega', run: '20.456.789-3', unidad: 'U.A. Apoyo', estado: 'ACTIVO' },
-  { id: 6, grado: 'Cabo 2°', nombre: 'Pedro Morales Silva', run: '15.987.654-4', unidad: 'U.A. Personal', estado: 'ACTIVO' },
-])
+const expedienteSeleccionadoId = computed(
+  () => calificadoSeleccionado.value?.expedienteId ?? null,
+)
 
-const instrumentos: Instrumento[] = [
-  { id: 'hoja-vida', nombre: 'Hoja de Vida', descripcion: 'Registro cronológico de anotaciones.', icono: 'pi pi-book', estado: 'EN_PROCESO' },
-  { id: 'evint-1', nombre: 'EVINT 1', descripcion: 'Evaluación integral N.° 1.', icono: 'pi pi-chart-bar', estado: 'COMPLETADO' },
-  { id: 'evint-2', nombre: 'EVINT 2', descripcion: 'Evaluación integral N.° 2.', icono: 'pi pi-chart-line', estado: 'PENDIENTE' },
-  { id: 'hc1', nombre: 'HC1', descripcion: 'Hoja de calificación N.° 1.', icono: 'pi pi-clipboard', estado: 'COMPLETADO' },
-  { id: 'hc2', nombre: 'HC2', descripcion: 'Hoja de calificación N.° 2.', icono: 'pi pi-clipboard', estado: 'PENDIENTE' },
-  { id: 'ham', nombre: 'HAM', descripcion: 'Hoja de aspectos militares.', icono: 'pi pi-star', estado: 'DISPONIBLE' },
-  { id: 'hapsem', nombre: 'HAPSEM', descripcion: 'Hoja de aptitud psicofísica.', icono: 'pi pi-heart', estado: 'PENDIENTE' },
-  { id: 'resoluciones', nombre: 'Resoluciones', descripcion: 'Resoluciones asociadas.', icono: 'pi pi-file', estado: 'DISPONIBLE' },
-]
+const hojaVidaSeleccionadaId = computed(
+  () => calificadoSeleccionado.value?.hojaVidaId ?? null,
+)
 
-const seccionesExpediente = [
-  { id: 'resumen', label: 'Resumen', icon: 'pi pi-user' },
-  { id: 'instrumentos', label: 'Instrumentos', icon: 'pi pi-th-large' },
-  { id: 'hoja-vida', label: 'Hoja de Vida', icon: 'pi pi-book' },
-  { id: 'anotaciones', label: 'Anotaciones', icon: 'pi pi-file-edit' },
-  { id: 'documentos', label: 'Documentos', icon: 'pi pi-folder' },
-  { id: 'resoluciones', label: 'Resoluciones', icon: 'pi pi-file' },
-]
+const opcionesGrado = computed(() =>
+  [...new Set(calificados.value.map(item => item.grado))].sort(),
+)
 
-const modoSoloLectura = computed(() => periodoSeleccionado.value?.estado === 'CERRADO')
-const opcionesGrado = computed(() => [...new Set(calificados.value.map(item => item.grado))].sort())
-const opcionesUnidad = computed(() => [...new Set(calificados.value.map(item => item.unidad))].sort())
+const opcionesUnidad = computed(() =>
+  [...new Set(calificados.value.map(item => item.unidad))].sort(),
+)
 
 const calificadosFiltrados = computed(() => {
   const consulta = textoBusqueda.value.trim().toLocaleLowerCase('es')
 
   return calificados.value.filter(item => {
-    const coincideTexto = !consulta || [item.nombre, item.run, item.grado, item.unidad]
-      .some(valor => valor.toLocaleLowerCase('es').includes(consulta))
-    const coincideGrado = !filtroGrado.value || item.grado === filtroGrado.value
-    const coincideUnidad = !filtroUnidad.value || item.unidad === filtroUnidad.value
+    const coincideTexto = !consulta || [
+      item.nombre,
+      item.run,
+      item.grado,
+      item.unidad,
+    ].some(valor => valor.toLocaleLowerCase('es').includes(consulta))
 
-    return coincideTexto && coincideGrado && coincideUnidad
+    return coincideTexto
+      && (!filtroGrado.value || item.grado === filtroGrado.value)
+      && (!filtroUnidad.value || item.unidad === filtroUnidad.value)
   })
 })
 
+const dentroExpediente = computed(() => [
+  'EXPEDIENTE',
+  'HOJA_VIDA',
+  'ANOTACION',
+  'EVINT',
+  'HC1',
+  'HC2',
+  'HAM',
+  'HAPSEM',
+  'RESOLUCIONES',
+  'RESOLUCION_FORMULARIO',
+].includes(pantalla.value))
+
 const menuItems = computed(() => {
-  if (pantalla.value === 'EXPEDIENTE') {
+  if (dentroExpediente.value) {
     return [
       { id: 'volver', label: 'Volver a calificados', icon: 'pi pi-arrow-left' },
-      ...seccionesExpediente,
+      { id: 'resumen', label: 'Resumen', icon: 'pi pi-user' },
+      { id: 'hoja-vida', label: 'Hoja de Vida', icon: 'pi pi-book' },
+      { id: 'anotaciones', label: 'Anotaciones', icon: 'pi pi-file-edit' },
+      { id: 'evint-1', label: 'EVINT 1', icon: 'pi pi-chart-bar' },
+      { id: 'evint-2', label: 'EVINT 2', icon: 'pi pi-chart-line' },
+      { id: 'hc1', label: 'HC1', icon: 'pi pi-clipboard' },
+      { id: 'hc2', label: 'HC2', icon: 'pi pi-clipboard' },
+      { id: 'ham', label: 'HAM', icon: 'pi pi-star' },
+      { id: 'hapsem', label: 'HAPSEM', icon: 'pi pi-heart' },
+      { id: 'resoluciones', label: 'Resoluciones', icon: 'pi pi-file' },
     ]
   }
 
   return [
-    { id: 'inicio', label: 'Inicio', icon: 'pi pi-home' },
     { id: 'calificados', label: 'Calificados', icon: 'pi pi-users' },
     { id: 'periodos', label: 'Períodos', icon: 'pi pi-calendar' },
     { id: 'configuracion', label: 'Configuración', icon: 'pi pi-cog' },
-    { id: 'respaldo', label: 'Respaldo', icon: 'pi pi-cloud-upload' },
+    { id: 'designacion', label: 'Agregar calificado', icon: 'pi pi-user-plus' },
   ]
 })
 
-function severidadInstrumento(estado: Instrumento['estado']): 'success' | 'warn' | 'info' | 'secondary' {
-  if (estado === 'COMPLETADO') return 'success'
-  if (estado === 'PENDIENTE') return 'warn'
-  if (estado === 'EN_PROCESO') return 'info'
-  return 'secondary'
-}
-
-function textoEstadoInstrumento(estado: Instrumento['estado']): string {
-  return estado.replace('_', ' ').toLocaleLowerCase('es').replace(/^./, letra => letra.toUpperCase())
-}
-
 async function inicializarAplicacion(): Promise<void> {
   pantalla.value = 'CARGANDO'
-
   try {
     await obtenerEstadoConfiguracionInicial()
     baseDatosConectada.value = true
   } catch (error) {
-    console.error('No fue posible verificar la base de datos:', error)
+    console.error(error)
     baseDatosConectada.value = false
   }
-
   pantalla.value = 'LOGIN'
 }
 
 async function iniciarSesion(): Promise<void> {
   errorLogin.value = ''
-
   if (!usuario.value.trim() || !contrasena.value.trim()) {
     errorLogin.value = 'Ingrese usuario y contraseña.'
     return
@@ -189,6 +179,7 @@ async function iniciarSesion(): Promise<void> {
       return
     }
 
+    periodos.value = await listarPeriodosUi()
     pantalla.value = 'SELECCION_PERIODO'
   } catch (error) {
     console.error(error)
@@ -197,18 +188,163 @@ async function iniciarSesion(): Promise<void> {
   }
 }
 
-function seleccionarPeriodo(periodo: Periodo): void {
-  periodoSeleccionado.value = periodo
-  calificadoSeleccionado.value = null
-  menuActivo.value = 'calificados'
-  pantalla.value = 'CALIFICADOS'
+async function seleccionarPeriodo(periodo: PeriodoUi): Promise<void> {
+  cargandoDatos.value = true
+  errorCarga.value = ''
+  try {
+    await seleccionarPeriodoUi(periodo.id)
+    periodoSeleccionado.value = periodo
+    calificados.value = await listarCalificadosUi(periodo.id)
+    calificadoSeleccionado.value = null
+    menuActivo.value = 'calificados'
+    pantalla.value = 'CALIFICADOS'
+  } catch (error) {
+    console.error(error)
+    errorCarga.value = 'No fue posible abrir el período seleccionado.'
+  } finally {
+    cargandoDatos.value = false
+  }
 }
 
-function abrirExpediente(calificado: Calificado): void {
+async function recargarCalificados(): Promise<void> {
+  if (!periodoSeleccionado.value) return
+  cargandoDatos.value = true
+  try {
+    calificados.value = await listarCalificadosUi(periodoSeleccionado.value.id)
+  } finally {
+    cargandoDatos.value = false
+  }
+}
+
+function abrirExpediente(calificado: CalificadoUi): void {
   calificadoSeleccionado.value = calificado
-  seccionExpediente.value = 'instrumentos'
-  menuActivo.value = 'instrumentos'
+  menuActivo.value = 'resumen'
   pantalla.value = 'EXPEDIENTE'
+}
+
+async function asegurarHojaVida(): Promise<number | null> {
+  if (hojaVidaSeleccionadaId.value) return hojaVidaSeleccionadaId.value
+  if (!expedienteSeleccionadoId.value) return null
+
+  const expediente = await obtenerExpedienteDetalle(expedienteSeleccionadoId.value)
+  const hojaVidaId = expediente?.hoja_vida_id ?? null
+
+  if (hojaVidaId && calificadoSeleccionado.value) {
+    calificadoSeleccionado.value = {
+      ...calificadoSeleccionado.value,
+      hojaVidaId,
+    }
+  }
+
+  return hojaVidaId
+}
+
+async function abrirHojaVida(): Promise<void> {
+  if (await asegurarHojaVida()) {
+    menuActivo.value = 'hoja-vida'
+    pantalla.value = 'HOJA_VIDA'
+  }
+}
+
+async function abrirAnotacion(): Promise<void> {
+  if (modoSoloLectura.value) {
+    window.alert('El período está cerrado y solo permite lectura.')
+    return
+  }
+  if (await asegurarHojaVida()) {
+    menuActivo.value = 'anotaciones'
+    pantalla.value = 'ANOTACION'
+  }
+}
+
+async function abrirEvint(numero: 1 | 2): Promise<void> {
+  if (!expedienteSeleccionadoId.value) return
+  const instrumento = await obtenerInstrumentoExpediente(
+    expedienteSeleccionadoId.value,
+    'EVINT',
+    numero,
+  )
+
+  if (!instrumento) {
+    window.alert(`El expediente no contiene EVINT ${numero}.`)
+    return
+  }
+
+  instrumentoEvintSeleccionadoId.value = instrumento.instrumento_id
+  menuActivo.value = `evint-${numero}`
+  pantalla.value = 'EVINT'
+}
+
+async function abrirDocumento(tipo: 'HC1' | 'HC2' | 'HAM' | 'HAPSEM'): Promise<void> {
+  if (!(await asegurarHojaVida())) return
+  menuActivo.value = tipo.toLowerCase()
+  pantalla.value = tipo
+}
+
+async function abrirInstrumento(instrumento: InstrumentoExpedienteDetalle): Promise<void> {
+  const tipo = instrumento.tipo_instrumento.trim().toUpperCase()
+  if (tipo === 'HOJA_VIDA' || tipo === 'HOJA DE VIDA' || tipo === 'HV') {
+    await abrirHojaVida()
+  } else if (tipo === 'EVINT') {
+    instrumentoEvintSeleccionadoId.value = instrumento.instrumento_id
+    pantalla.value = 'EVINT'
+  } else if (tipo === 'HC1' || tipo === 'HC2' || tipo === 'HAM' || tipo === 'HAPSEM') {
+    await abrirDocumento(tipo)
+  }
+}
+
+function abrirResoluciones(): void {
+  resolucionSeleccionadaId.value = null
+  menuActivo.value = 'resoluciones'
+  pantalla.value = 'RESOLUCIONES'
+}
+
+function abrirNuevaResolucion(): void {
+  if (modoSoloLectura.value) {
+    window.alert('El período está cerrado y solo permite lectura.')
+    return
+  }
+  resolucionSeleccionadaId.value = null
+  pantalla.value = 'RESOLUCION_FORMULARIO'
+}
+
+function abrirResolucion(id: number): void {
+  resolucionSeleccionadaId.value = id
+  pantalla.value = 'RESOLUCION_FORMULARIO'
+}
+
+async function manejarMenu(id: string): Promise<void> {
+  menuActivo.value = id
+
+  if (id === 'volver' || id === 'calificados') {
+    pantalla.value = 'CALIFICADOS'
+    menuActivo.value = 'calificados'
+  } else if (id === 'periodos') {
+    periodos.value = await listarPeriodosUi()
+    pantalla.value = 'SELECCION_PERIODO'
+  } else if (id === 'configuracion') {
+    pantalla.value = 'CONFIGURACION'
+  } else if (id === 'designacion') {
+    if (modoSoloLectura.value) {
+      window.alert('No se pueden agregar calificados a un período cerrado.')
+      return
+    }
+    pantalla.value = 'DESIGNACION'
+  } else if (id === 'resumen') {
+    pantalla.value = 'EXPEDIENTE'
+  } else if (id === 'hoja-vida') {
+    await abrirHojaVida()
+  } else if (id === 'anotaciones') {
+    await abrirAnotacion()
+  } else if (id === 'evint-1') {
+    await abrirEvint(1)
+  } else if (id === 'evint-2') {
+    await abrirEvint(2)
+  } else if (id === 'hc1' || id === 'hc2' || id === 'ham' || id === 'hapsem') {
+    await abrirDocumento(id.toUpperCase() as 'HC1' | 'HC2' | 'HAM' | 'HAPSEM')
+  } else if (id === 'resoluciones') {
+    abrirResoluciones()
+  }
 }
 
 function cerrarSesion(): void {
@@ -217,25 +353,6 @@ function cerrarSesion(): void {
   periodoSeleccionado.value = null
   calificadoSeleccionado.value = null
   pantalla.value = 'LOGIN'
-}
-
-function manejarMenu(id: string): void {
-  menuActivo.value = id
-
-  if (id === 'volver' || id === 'calificados' || id === 'inicio') {
-    pantalla.value = 'CALIFICADOS'
-    menuActivo.value = 'calificados'
-    return
-  }
-
-  if (id === 'periodos') {
-    pantalla.value = 'SELECCION_PERIODO'
-    return
-  }
-
-  if (pantalla.value === 'EXPEDIENTE') {
-    seccionExpediente.value = id
-  }
 }
 
 function limpiarFiltros(): void {
@@ -272,22 +389,13 @@ onMounted(() => void inicializarAplicacion())
 
         <div class="hv-form-stack">
           <label for="usuario">Usuario</label>
-          <span class="hv-input-icon">
-            <i class="pi pi-user" />
-            <InputText id="usuario" v-model="usuario" autocomplete="username" placeholder="Ingrese su usuario" fluid />
-          </span>
-
+          <InputText id="usuario" v-model="usuario" autocomplete="username" placeholder="Ingrese su usuario" fluid />
           <label for="contrasena">Contraseña</label>
           <Password input-id="contrasena" v-model="contrasena" :feedback="false" toggle-mask placeholder="Ingrese su contraseña" fluid @keyup.enter="iniciarSesion" />
-
-          <div class="hv-login-options">
-            <label class="hv-checkbox-label">
-              <input v-model="recordarSesion" type="checkbox">
-              <span>Recordarme</span>
-            </label>
-            <button type="button" class="hv-link-button">¿Olvidó su contraseña?</button>
-          </div>
-
+          <label class="hv-checkbox-label">
+            <input v-model="recordarSesion" type="checkbox">
+            <span>Recordarme</span>
+          </label>
           <small v-if="errorLogin" class="hv-error">{{ errorLogin }}</small>
           <Button label="Iniciar sesión" icon="pi pi-sign-in" fluid @click="iniciarSesion" />
         </div>
@@ -295,154 +403,172 @@ onMounted(() => void inicializarAplicacion())
     </section>
 
     <footer class="hv-global-statusbar">
-      <span class="hv-status-group"><i :class="baseDatosConectada ? 'hv-status-online' : 'hv-status-offline'" /> {{ baseDatosConectada ? 'Conectado a hvdigital.db' : 'Base de datos sin conexión' }}</span>
+      <span><i :class="baseDatosConectada ? 'hv-status-online' : 'hv-status-offline'" /> {{ baseDatosConectada ? 'Conectado a hvdigital.db' : 'Base de datos sin conexión' }}</span>
       <span>Período: Sin período seleccionado</span>
       <span>Versión {{ versionAplicacion }}</span>
     </footer>
   </main>
 
-  <div v-else-if="pantalla === 'CONFIGURACION_INICIAL'" class="hv-config-wrapper">
-    <div class="hv-simple-header"><strong>HVDigital</strong><span>Configuración inicial</span></div>
-    <ConfiguracionInicialView />
-    <footer class="hv-global-statusbar">
-      <span class="hv-status-group"><i class="hv-status-online" /> Conectado a hvdigital.db</span>
-      <span>Período: Sin período seleccionado</span>
-      <span>Versión {{ versionAplicacion }}</span>
-    </footer>
-  </div>
+  <ConfiguracionInicialView v-else-if="pantalla === 'CONFIGURACION_INICIAL'" />
 
-  <main v-else-if="pantalla === 'SELECCION_PERIODO'" class="hv-selection-page">
-    <header class="hv-simple-header">
-      <strong>HVDigital</strong>
-      <Button label="Cerrar sesión" icon="pi pi-sign-out" severity="secondary" text @click="cerrarSesion" />
+  <main v-else-if="pantalla === 'SELECCION_PERIODO'" class="hv-selection-page hv-page-with-status">
+    <header class="hv-page-heading">
+      <div>
+        <span class="hv-eyebrow">HVDigital</span>
+        <h1>Selección de período</h1>
+        <p>Los períodos cerrados se abren automáticamente en modo solo lectura.</p>
+      </div>
+      <Button label="Cerrar sesión" icon="pi pi-sign-out" severity="secondary" outlined @click="cerrarSesion" />
     </header>
 
-    <section class="hv-selection-content">
-      <div class="hv-page-heading">
-        <div>
-          <span class="hv-eyebrow">Períodos de calificación</span>
-          <h1>Seleccione el período</h1>
-          <p>Los períodos cerrados estarán disponibles únicamente para consulta.</p>
-        </div>
-      </div>
-
-      <div class="hv-period-list">
-        <article v-for="periodo in periodos" :key="periodo.id" class="hv-period-row" :class="{ 'hv-period-row-active': periodo.estado === 'ABIERTO' }">
-          <div class="hv-period-icon"><i class="pi pi-calendar" /></div>
-          <div class="hv-period-info">
-            <div class="hv-period-title-row">
-              <h2>{{ periodo.nombre }}</h2>
-              <Tag :value="periodo.estado === 'ABIERTO' ? 'Activo' : 'Cerrado'" :severity="periodo.estado === 'ABIERTO' ? 'success' : 'secondary'" />
+    <small v-if="errorCarga" class="hv-error">{{ errorCarga }}</small>
+    <section class="hv-period-list">
+      <Card v-for="periodo in periodos" :key="periodo.id" :class="['hv-period-row', { 'hv-period-row-active': periodo.estado === 'ABIERTO' }]">
+        <template #content>
+          <div class="hv-period-row-content">
+            <div>
+              <div class="hv-period-title-line">
+                <strong>{{ periodo.nombre }}</strong>
+                <Tag :value="periodo.estado === 'ABIERTO' ? 'Activo' : 'Cerrado'" :severity="periodo.estado === 'ABIERTO' ? 'success' : 'secondary'" />
+              </div>
+              <small>{{ periodo.fechaInicio }} — {{ periodo.fechaTermino }}</small>
+              <p>{{ periodo.estado === 'ABIERTO' ? 'Período actual · Puede trabajar con normalidad.' : 'Período cerrado · Acceso en solo lectura.' }}</p>
             </div>
-            <p>{{ periodo.fechaInicio }} — {{ periodo.fechaTermino }}</p>
-            <small>{{ periodo.estado === 'ABIERTO' ? 'Período habilitado para trabajar y registrar información.' : 'Período cerrado disponible en modo solo lectura.' }}</small>
+            <Button :label="periodo.estado === 'ABIERTO' ? 'Ingresar' : 'Solo lectura'" :icon="periodo.estado === 'ABIERTO' ? 'pi pi-sign-in' : 'pi pi-eye'" :loading="cargandoDatos" @click="seleccionarPeriodo(periodo)" />
           </div>
-          <Button :label="periodo.estado === 'ABIERTO' ? 'Ingresar' : 'Solo lectura'" :icon="periodo.estado === 'ABIERTO' ? 'pi pi-arrow-right' : 'pi pi-eye'" icon-pos="right" :outlined="periodo.estado === 'CERRADO'" @click="seleccionarPeriodo(periodo)" />
-        </article>
-      </div>
+        </template>
+      </Card>
     </section>
 
     <footer class="hv-global-statusbar">
-      <span class="hv-status-group"><i class="hv-status-online" /> Conectado a hvdigital.db</span>
+      <span><i class="hv-status-online" /> Conectado a hvdigital.db</span>
       <span>Período: Sin período seleccionado</span>
       <span>Versión {{ versionAplicacion }}</span>
     </footer>
   </main>
 
-  <div v-else class="hv-app-shell">
+  <div v-else class="hv-app-shell hv-app-shell-with-status">
     <aside class="hv-sidebar">
       <div class="hv-sidebar-brand">
         <div class="hv-brand-mark hv-brand-mark-small">HV</div>
-        <div><strong>HVDigital</strong><small>{{ pantalla === 'EXPEDIENTE' ? 'Expediente individual' : 'Gestión de calificados' }}</small></div>
+        <div><strong>HVDigital</strong><small>{{ dentroExpediente ? 'Expediente' : 'Gestión de calificados' }}</small></div>
       </div>
 
       <nav class="hv-sidebar-menu">
-        <button v-for="item in menuItems" :key="item.id" type="button" class="hv-sidebar-item" :class="{ 'hv-sidebar-item-active': menuActivo === item.id }" @click="manejarMenu(item.id)">
-          <i :class="item.icon" /><span>{{ item.label }}</span>
+        <button v-for="item in menuItems" :key="item.id" type="button" :class="['hv-sidebar-item', { 'hv-sidebar-item-active': menuActivo === item.id }]" @click="manejarMenu(item.id)">
+          <i :class="item.icon" />
+          <span>{{ item.label }}</span>
         </button>
       </nav>
 
-      <div class="hv-sidebar-user">
-        <div class="hv-user-avatar">{{ usuario.slice(0, 2).toUpperCase() || 'AD' }}</div>
-        <div><small>Usuario</small><strong>{{ usuario || 'Administrador' }}</strong></div>
+      <div class="hv-sidebar-context">
+        <small>Usuario: {{ usuario }}</small>
+        <button type="button" class="hv-sidebar-logout" @click="cerrarSesion"><i class="pi pi-sign-out" /> Cerrar sesión</button>
       </div>
-      <button type="button" class="hv-sidebar-logout" @click="cerrarSesion"><i class="pi pi-sign-out" /> Cerrar sesión</button>
     </aside>
 
     <section class="hv-workspace">
       <header class="hv-topbar">
         <div>
-          <strong>{{ pantalla === 'EXPEDIENTE' ? `Expediente · ${calificadoSeleccionado?.nombre}` : 'Calificados' }}</strong>
-          <small>{{ pantalla === 'EXPEDIENTE' ? `${calificadoSeleccionado?.grado} · ${calificadoSeleccionado?.run}` : periodoSeleccionado?.nombre }}</small>
+          <strong>{{ dentroExpediente ? calificadoSeleccionado?.nombre : pantalla === 'CONFIGURACION' ? 'Configuración' : 'Calificados' }}</strong>
+          <small>{{ periodoSeleccionado?.nombre ?? 'Sin período seleccionado' }}</small>
         </div>
-        <div class="hv-topbar-actions"><Tag v-if="modoSoloLectura" value="Solo lectura" severity="warn" /><i class="pi pi-bell" /></div>
+        <Tag v-if="modoSoloLectura" value="Solo lectura" severity="warn" />
       </header>
 
       <div v-if="pantalla === 'CALIFICADOS'" class="hv-content">
         <header class="hv-page-heading hv-page-heading-compact">
-          <div><span class="hv-eyebrow">Personal del período</span><h1>Calificados</h1><p>Seleccione una persona para abrir su expediente e instrumentos.</p></div>
-          <Button label="Nuevo calificado" icon="pi pi-plus" :disabled="modoSoloLectura" />
+          <div>
+            <span class="hv-eyebrow">{{ periodoSeleccionado?.nombre }}</span>
+            <h1>Calificados</h1>
+            <p>Seleccione una persona para abrir su expediente e instrumentos.</p>
+          </div>
+          <Button label="Nuevo calificado" icon="pi pi-user-plus" :disabled="modoSoloLectura" @click="manejarMenu('designacion')" />
         </header>
 
-        <section class="hv-filter-panel">
-          <span class="hv-search-field"><i class="pi pi-search" /><InputText v-model="textoBusqueda" placeholder="Buscar por nombre, RUN, grado o unidad…" fluid /></span>
-          <Select v-model="filtroGrado" :options="opcionesGrado" placeholder="Todos los grados" show-clear fluid />
-          <Select v-model="filtroUnidad" :options="opcionesUnidad" placeholder="Todas las unidades" show-clear fluid />
+        <section class="hv-filter-bar">
+          <span class="hv-search-control"><i class="pi pi-search" /><InputText v-model="textoBusqueda" placeholder="Buscar calificado…" fluid /></span>
+          <Select v-model="filtroGrado" :options="opcionesGrado" placeholder="Todos los grados" show-clear />
+          <Select v-model="filtroUnidad" :options="opcionesUnidad" placeholder="Todas las unidades" show-clear />
           <Button label="Limpiar" icon="pi pi-filter-slash" severity="secondary" outlined @click="limpiarFiltros" />
+          <Button icon="pi pi-refresh" severity="secondary" outlined :loading="cargandoDatos" @click="recargarCalificados" />
         </section>
 
-        <Card class="hv-table-card">
+        <Card>
           <template #content>
-            <DataTable :value="calificadosFiltrados" paginator :rows="10" striped-rows responsive-layout="scroll" data-key="id">
-              <Column header="N.°"><template #body="slotProps">{{ slotProps.index + 1 }}</template></Column>
+            <DataTable :value="calificadosFiltrados" paginator :rows="10" striped-rows responsive-layout="scroll" :loading="cargandoDatos" empty-message="No existen calificados para este período.">
               <Column field="grado" header="Grado" sortable />
               <Column field="nombre" header="Nombre completo" sortable />
               <Column field="run" header="RUN" />
-              <Column field="unidad" header="Unidad / Dependencia" sortable />
-              <Column field="estado" header="Estado"><template #body="slotProps"><Tag :value="slotProps.data.estado" severity="success" /></template></Column>
-              <Column header="Acciones" style="width: 8rem"><template #body="slotProps"><Button label="Ver" icon="pi pi-eye" size="small" @click="abrirExpediente(slotProps.data)" /></template></Column>
-              <template #empty><div class="hv-empty-table"><i class="pi pi-users" /><strong>No se encontraron calificados</strong><span>Modifique los filtros o agregue un nuevo calificado.</span></div></template>
+              <Column field="unidad" header="Unidad" sortable />
+              <Column field="estado" header="Estado"><template #body="slotProps"><Tag :value="slotProps.data.estado" :severity="slotProps.data.estado === 'ACTIVO' ? 'success' : 'secondary'" /></template></Column>
+              <Column header="Acción" style="width: 8rem"><template #body="slotProps"><Button label="Ver" icon="pi pi-eye" size="small" @click="abrirExpediente(slotProps.data)" /></template></Column>
             </DataTable>
           </template>
         </Card>
       </div>
 
-      <div v-else-if="pantalla === 'EXPEDIENTE'" class="hv-content">
-        <div class="hv-breadcrumb"><button type="button" @click="manejarMenu('volver')">Calificados</button><i class="pi pi-angle-right" /><span>{{ calificadoSeleccionado?.nombre }}</span></div>
-
-        <header class="hv-page-heading hv-page-heading-compact">
-          <div><span class="hv-eyebrow">Expediente individual</span><h1>{{ calificadoSeleccionado?.nombre }}</h1><p>{{ calificadoSeleccionado?.grado }} · RUN {{ calificadoSeleccionado?.run }} · {{ calificadoSeleccionado?.unidad }}</p></div>
-          <Button label="Volver a calificados" icon="pi pi-arrow-left" severity="secondary" outlined @click="manejarMenu('volver')" />
-        </header>
-
-        <nav class="hv-expediente-tabs">
-          <button v-for="seccion in seccionesExpediente" :key="seccion.id" type="button" :class="{ active: seccionExpediente === seccion.id }" @click="seccionExpediente = seccion.id; menuActivo = seccion.id"><i :class="seccion.icon" />{{ seccion.label }}</button>
-        </nav>
-
-        <section v-if="seccionExpediente === 'instrumentos'" class="hv-expediente-section">
-          <div class="hv-section-heading"><div><h2>Instrumentos de evaluación</h2><p>Documentos e instrumentos correspondientes al período seleccionado.</p></div><Tag :value="modoSoloLectura ? 'Consulta' : 'Edición habilitada'" :severity="modoSoloLectura ? 'secondary' : 'success'" /></div>
-          <div class="hv-instrument-grid">
-            <article v-for="instrumento in instrumentos" :key="instrumento.id" class="hv-instrument-card">
-              <div class="hv-instrument-icon"><i :class="instrumento.icono" /></div>
-              <div class="hv-instrument-copy"><h3>{{ instrumento.nombre }}</h3><p>{{ instrumento.descripcion }}</p><Tag :value="textoEstadoInstrumento(instrumento.estado)" :severity="severidadInstrumento(instrumento.estado)" /></div>
-              <Button label="Ver" icon="pi pi-arrow-right" icon-pos="right" severity="secondary" outlined />
-            </article>
-          </div>
-        </section>
-
-        <section v-else class="hv-placeholder-panel">
-          <div class="hv-placeholder-icon"><i :class="seccionesExpediente.find(item => item.id === seccionExpediente)?.icon" /></div>
-          <h2>{{ seccionesExpediente.find(item => item.id === seccionExpediente)?.label }}</h2>
-          <p>La vista funcional existente de este módulo será montada dentro de esta nueva estructura visual.</p>
-          <Button label="Abrir módulo" icon="pi pi-arrow-right" icon-pos="right" />
-        </section>
+      <div v-else-if="pantalla === 'DESIGNACION'" class="hv-module-host">
+        <DesignacionCalificadosView />
       </div>
 
-      <footer class="hv-global-statusbar hv-statusbar-app">
-        <span class="hv-status-group"><i :class="baseDatosConectada ? 'hv-status-online' : 'hv-status-offline'" /> {{ baseDatosConectada ? 'Conectado a hvdigital.db' : 'Sin conexión' }}</span>
-        <span>Período: {{ periodoSeleccionado?.nombre }} <strong>{{ modoSoloLectura ? '(CERRADO)' : '(ACTIVO)' }}</strong></span>
-        <span>Versión {{ versionAplicacion }}</span>
-      </footer>
+      <div v-else-if="pantalla === 'EXPEDIENTE' && expedienteSeleccionadoId" class="hv-module-host">
+        <ExpedienteDetalleView
+          :expediente-id="expedienteSeleccionadoId"
+          @volver="pantalla = 'CALIFICADOS'"
+          @abrir-instrumento="abrirInstrumento"
+          @abrir-evint="id => { instrumentoEvintSeleccionadoId = id; pantalla = 'EVINT' }"
+          @abrir-hoja-vida="abrirHojaVida"
+          @nueva-anotacion="abrirAnotacion"
+        />
+      </div>
+
+      <div v-else-if="pantalla === 'HOJA_VIDA' && hojaVidaSeleccionadaId" class="hv-module-host">
+        <HojaVidaView :hoja-vida-id="hojaVidaSeleccionadaId" @volver="pantalla = 'EXPEDIENTE'" @nueva-anotacion="abrirAnotacion" />
+      </div>
+
+      <div v-else-if="pantalla === 'ANOTACION' && hojaVidaSeleccionadaId" class="hv-module-host">
+        <Button label="Volver" icon="pi pi-arrow-left" severity="secondary" outlined class="hv-module-back" @click="pantalla = 'HOJA_VIDA'" />
+        <FormularioAnotacionView :hoja-vida-inicial-id="hojaVidaSeleccionadaId" />
+      </div>
+
+      <div v-else-if="pantalla === 'EVINT' && instrumentoEvintSeleccionadoId" class="hv-module-host">
+        <EvintView :instrumento-id="instrumentoEvintSeleccionadoId" @volver="pantalla = 'EXPEDIENTE'" />
+      </div>
+
+      <div v-else-if="pantalla === 'HC1' && hojaVidaSeleccionadaId" class="hv-module-host"><Hc1View :hoja-vida-id="hojaVidaSeleccionadaId" @volver="pantalla = 'EXPEDIENTE'" /></div>
+      <div v-else-if="pantalla === 'HC2' && hojaVidaSeleccionadaId" class="hv-module-host"><Hc2View :hoja-vida-id="hojaVidaSeleccionadaId" @volver="pantalla = 'EXPEDIENTE'" /></div>
+      <div v-else-if="pantalla === 'HAM' && hojaVidaSeleccionadaId" class="hv-module-host"><HamView :hoja-vida-id="hojaVidaSeleccionadaId" @volver="pantalla = 'EXPEDIENTE'" /></div>
+      <div v-else-if="pantalla === 'HAPSEM' && hojaVidaSeleccionadaId" class="hv-module-host"><HapsemView :hoja-vida-id="hojaVidaSeleccionadaId" @volver="pantalla = 'EXPEDIENTE'" /></div>
+
+      <div v-else-if="pantalla === 'RESOLUCIONES'" class="hv-module-host">
+        <ResolucionesView
+          @nueva-resolucion="abrirNuevaResolucion"
+          @abrir-resolucion="abrirResolucion"
+          @editar-resolucion="abrirResolucion"
+          @imprimir-resolucion="abrirResolucion"
+          @crear-anotacion="abrirNuevaResolucion"
+        />
+      </div>
+
+      <div v-else-if="pantalla === 'RESOLUCION_FORMULARIO'" class="hv-module-host">
+        <ResolucionFormularioView
+          :resolucion-id="resolucionSeleccionadaId"
+          @volver="abrirResoluciones"
+          @guardada="abrirResolucion"
+          @emitida="abrirResolucion"
+        />
+      </div>
+
+      <div v-else-if="pantalla === 'CONFIGURACION'" class="hv-module-host">
+        <ConfiguracionSistemaView @volver="pantalla = 'CALIFICADOS'" />
+      </div>
     </section>
+
+    <footer class="hv-global-statusbar hv-statusbar-app">
+      <span><i :class="baseDatosConectada ? 'hv-status-online' : 'hv-status-offline'" /> {{ baseDatosConectada ? 'Conectado a hvdigital.db' : 'Base de datos sin conexión' }}</span>
+      <span>Período: {{ periodoSeleccionado?.nombre ?? 'Sin período' }} <strong v-if="periodoSeleccionado">({{ periodoSeleccionado.estado }})</strong></span>
+      <span>Versión {{ versionAplicacion }}</span>
+    </footer>
   </div>
 </template>
