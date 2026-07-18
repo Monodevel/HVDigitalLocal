@@ -1,0 +1,87 @@
+:root {
+  --hv-page: #f6f7f9;
+  --hv-surface: #ffffff;
+  --hv-surface-soft: #f3f5f7;
+  --hv-text: #182230;
+  --hv-muted: #667085;
+  --hv-border: #e1e5ea;
+  --hv-primary: #1f5d93;
+  --hv-primary-hover: #194d7a;
+  --hv-primary-soft: #edf4fa;
+  --hv-danger: #a82b35;
+  --hv-danger-soft: #fff1f2;
+  --hv-success: #26724b;
+  --hv-success-soft: #eef9f2;
+  --hv-warning: #9a6500;
+  --hv-warning-soft: #fff6d8;
+  --hv-radius-sm: 8px;
+  --hv-radius-md: 12px;
+  --hv-radius-lg: 16px;
+  --hv-shadow-sm:
+    0 4px 16px rgba(16, 32, 54, 0.05);
+  --hv-shadow-md:
+    0 18px 50px rgba(16, 32, 54, 0.12);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--hv-text);
+  background: var(--hv-page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--hv-page);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.hv-button {
+  min-height: 42px;
+  padding: 0 15px;
+  border-radius: var(--hv-radius-sm);
+  font-weight: 720;
+}
+
+.hv-button-primary {
+  color: #fff;
+  background: var(--hv-primary);
+  border: 1px solid var(--hv-primary);
+}
+
+.hv-button-primary:hover {
+  background: var(--hv-primary-hover);
+}
+
+.hv-button-secondary {
+  color: var(--hv-primary);
+  background: var(--hv-primary-soft);
+  border: 1px solid transparent;
+}
+
+.hv-button-ghost {
+  color: var(--hv-text);
+  background: var(--hv-surface);
+  border: 1px solid var(--hv-border);
+}
+
+.hv-button-danger {
+  color: var(--hv-danger);
+  background: var(--hv-danger-soft);
+  border: 1px solid transparent;
+}
