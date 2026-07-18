@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import Button from 'primevue/button'
-import Card from 'primevue/card'
 import Dialog from 'primevue/dialog'
-import Message from 'primevue/message'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 
@@ -12,6 +10,7 @@ import {
   listarAnotacionesHojaVida,
   listarBorradoresHojaVida,
   obtenerHojaVidaResumen,
+  obtenerUnidadSistema,
 } from '../../services/hojaVida'
 import {
   estamparAnotacion,
@@ -25,7 +24,6 @@ import type {
 import type { OrigenAnotacion } from '../../types/estampadoAnotaciones'
 
 const props = defineProps<{ hojaVidaId: number }>()
-
 const emit = defineEmits<{
   volver: []
   nuevaAnotacion: [hojaVidaId: number]
@@ -36,17 +34,16 @@ const procesando = ref(false)
 const error = ref('')
 const mensaje = ref('')
 const resumen = ref<HojaVidaResumen | null>(null)
+const unidad = ref('')
 const borradores = ref<BorradorHojaVida[]>([])
 const anotaciones = ref<AnotacionHojaVida[]>([])
 const borradorSeleccionado = ref<BorradorHojaVida | null>(null)
 const modalEstampado = ref(false)
-const mostrarBorradores = ref(true)
-
 const estampado = reactive({
   origen: 'CALIFICADOR_DIRECTO' as OrigenAnotacion,
 })
 
-const opcionesOrigen: Array<{ label: string; value: OrigenAnotacion }> = [
+const opcionesOrigen = [
   { label: 'Calificador directo', value: 'CALIFICADOR_DIRECTO' },
   { label: 'Autoridad superior', value: 'AUTORIDAD_SUPERIOR' },
   { label: 'Oficial general', value: 'OFICIAL_GENERAL' },
@@ -54,52 +51,75 @@ const opcionesOrigen: Array<{ label: string; value: OrigenAnotacion }> = [
   { label: 'Sistema', value: 'SISTEMA' },
 ]
 
-const esSoloLectura = computed(() => resumen.value?.hoja_vida_estado !== 'abierta')
+const meses = [
+  'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+  'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE',
+]
+
+const totalFilas = 62
+const filasPrimerBloque = 28
+
 const nombreCalificado = computed(() => {
-  if (!resumen.value) return 'Hoja de Vida'
-  return [resumen.value.grado_calidad_abreviatura, resumen.value.nombre_completo]
-    .filter(Boolean)
-    .join(' ')
+  if (!resumen.value) return ''
+  return [
+    resumen.value.grado_calidad_abreviatura,
+    resumen.value.nombre_completo,
+  ].filter(Boolean).join(' ').toUpperCase()
 })
 
-const estadoVisual = computed(() => {
-  const estado = resumen.value?.hoja_vida_estado ?? 'abierta'
-  if (estado === 'cerrada') return { texto: 'Cerrada', severidad: 'secondary' as const }
-  if (estado === 'anulada') return { texto: 'Anulada', severidad: 'danger' as const }
-  return { texto: 'Abierta', severidad: 'success' as const }
+const modoSoloLectura = computed(() =>
+  resumen.value?.hoja_vida_estado !== 'abierta',
+)
+
+const filasDocumento = computed<Array<AnotacionHojaVida | null>>(() => {
+  const filas: Array<AnotacionHojaVida | null> = [...anotaciones.value]
+  while (filas.length < totalFilas) filas.push(null)
+  return filas.slice(0, totalFilas)
 })
 
-const puntajeAcumulado = computed(() => resumen.value?.puntaje_acumulado_visual ?? '0,00')
+const filasSuperiores = computed(() =>
+  filasDocumento.value.slice(0, filasPrimerBloque),
+)
+
+const filasInferiores = computed(() =>
+  filasDocumento.value.slice(filasPrimerBloque),
+)
 
 function obtenerMensajeError(excepcion: unknown): string {
   return excepcion instanceof Error ? excepcion.message : String(excepcion)
 }
 
-function formatoFecha(fecha: string | null | undefined): string {
-  if (!fecha) return 'Sin fecha'
+function partesFecha(fecha: string | null | undefined) {
+  if (!fecha) return { dia: '', mes: '', anio: '' }
   const [anio, mes, dia] = fecha.slice(0, 10).split('-')
-  return anio && mes && dia ? `${dia}/${mes}/${anio}` : fecha
+  return {
+    dia: dia ?? '',
+    mes: meses[Number(mes) - 1] ?? '',
+    anio: anio ?? '',
+  }
 }
 
-function severidadEfecto(efecto: string | null): 'success' | 'danger' | 'secondary' {
-  if (efecto === 'MERITO') return 'success'
-  if (efecto === 'DEMERITO') return 'danger'
-  return 'secondary'
+function fechaCorta(fecha: string | null | undefined): string {
+  if (!fecha) return ''
+  const [anio, mes, dia] = fecha.slice(0, 10).split('-')
+  return `${dia ?? ''}/${mes ?? ''}/${anio ?? ''}`
 }
 
-function etiquetaEfecto(efecto: string | null): string {
-  if (efecto === 'MERITO') return 'Mérito'
-  if (efecto === 'DEMERITO') return 'Demérito'
-  return 'Neutra'
+function textoAnotacion(anotacion: AnotacionHojaVida): string {
+  const partes = [
+    anotacion.titulo_final,
+    anotacion.concepto_nombre,
+    anotacion.cuerpo_final,
+    anotacion.numero_resolucion
+      ? `RES. EXENTA N.º ${anotacion.numero_resolucion} de fecha ${fechaCorta(anotacion.fecha_resolucion)}`
+      : '',
+  ]
+  return partes.filter(Boolean).join('\n')
 }
 
-function colorAnotacion(anotacion: AnotacionHojaVida | BorradorHojaVida): string {
-  return anotacion.color_hex || (anotacion.color_semantico === 'ROJO' ? '#b4232d' : '#111827')
-}
-
-function lineaResolucion(anotacion: AnotacionHojaVida | BorradorHojaVida): string {
-  if (!anotacion.numero_resolucion) return ''
-  return `Res. Exenta N.º ${anotacion.numero_resolucion} de fecha ${formatoFecha(anotacion.fecha_resolucion)}`
+function colorAnotacion(anotacion: AnotacionHojaVida): string {
+  return anotacion.color_hex ||
+    (anotacion.color_semantico === 'ROJO' ? '#b42318' : '#111111')
 }
 
 async function cargar(): Promise<void> {
@@ -108,17 +128,22 @@ async function cargar(): Promise<void> {
   mensaje.value = ''
 
   try {
-    const [resumenResultado, borradoresResultado, anotacionesResultado] = await Promise.all([
-      obtenerHojaVidaResumen(props.hojaVidaId),
-      listarBorradoresHojaVida(props.hojaVidaId),
-      listarAnotacionesHojaVida(props.hojaVidaId),
-    ])
+    const [resumenResultado, borradoresResultado, anotacionesResultado, unidadResultado] =
+      await Promise.all([
+        obtenerHojaVidaResumen(props.hojaVidaId),
+        listarBorradoresHojaVida(props.hojaVidaId),
+        listarAnotacionesHojaVida(props.hojaVidaId),
+        obtenerUnidadSistema(),
+      ])
 
-    if (!resumenResultado) throw new Error('No se encontró la Hoja de Vida solicitada.')
+    if (!resumenResultado) {
+      throw new Error('No se encontró la Hoja de Vida solicitada.')
+    }
 
     resumen.value = resumenResultado
     borradores.value = borradoresResultado
     anotaciones.value = anotacionesResultado
+    unidad.value = unidadResultado
   } catch (excepcion) {
     error.value = obtenerMensajeError(excepcion)
   } finally {
@@ -127,16 +152,9 @@ async function cargar(): Promise<void> {
 }
 
 function abrirEstampado(borrador: BorradorHojaVida): void {
-  if (esSoloLectura.value) return
   borradorSeleccionado.value = borrador
   estampado.origen = 'CALIFICADOR_DIRECTO'
   modalEstampado.value = true
-}
-
-function cerrarEstampado(): void {
-  if (procesando.value) return
-  modalEstampado.value = false
-  borradorSeleccionado.value = null
 }
 
 async function confirmarEstampado(): Promise<void> {
@@ -152,15 +170,20 @@ async function confirmarEstampado(): Promise<void> {
       borradorId: borrador.borrador_id,
       origen: estampado.origen,
       resolucionDocumentalId:
-        borrador.requiere_resolucion === 1 ? borrador.resolucion_documental_id : null,
+        borrador.requiere_resolucion === 1
+          ? borrador.resolucion_documental_id
+          : null,
     }
 
     const validacion = await validarEstampadoAnotacion(solicitud)
-    if (!validacion.valido) throw new Error(validacion.errores.join(' '))
+    if (!validacion.valido) {
+      throw new Error(validacion.errores.join(' '))
+    }
 
-    const resultado = await estamparAnotacion(solicitud)
-    mensaje.value = `Anotación N.º ${resultado.anotacionId} estampada correctamente.`
-    cerrarEstampado()
+    await estamparAnotacion(solicitud)
+    mensaje.value = 'Anotación estampada correctamente.'
+    modalEstampado.value = false
+    borradorSeleccionado.value = null
     await cargar()
   } catch (excepcion) {
     error.value = obtenerMensajeError(excepcion)
@@ -170,7 +193,6 @@ async function confirmarEstampado(): Promise<void> {
 }
 
 async function anularBorrador(borrador: BorradorHojaVida): Promise<void> {
-  if (esSoloLectura.value) return
   if (!window.confirm('¿Desea anular este borrador?')) return
 
   procesando.value = true
@@ -197,300 +219,186 @@ onMounted(cargar)
 </script>
 
 <template>
-  <main class="life-record-view">
-    <section v-if="cargando" class="life-record-loading">
+  <section class="hv-sheet-view">
+    <header class="hv-sheet-actions no-print">
+      <div>
+        <span class="hv-eyebrow">Instrumento oficial</span>
+        <h1>Hoja de Vida</h1>
+        <p>Formato basado en HOJA_DE_VIDA_FORMATO.xls</p>
+      </div>
+
+      <div class="hv-sheet-action-buttons">
+        <Button label="Actualizar" icon="pi pi-refresh" severity="secondary" outlined :loading="cargando" @click="cargar" />
+        <Button label="Imprimir" icon="pi pi-print" severity="secondary" outlined @click="imprimir" />
+        <Button label="Nueva anotación" icon="pi pi-plus" :disabled="modoSoloLectura" @click="emit('nuevaAnotacion', hojaVidaId)" />
+      </div>
+    </header>
+
+    <div v-if="error" class="hv-sheet-notice hv-sheet-notice-error no-print">{{ error }}</div>
+    <div v-if="mensaje" class="hv-sheet-notice hv-sheet-notice-success no-print">{{ mensaje }}</div>
+
+    <section v-if="cargando" class="hv-sheet-loading no-print">
       <i class="pi pi-spin pi-spinner" />
-      <strong>Cargando Hoja de Vida</strong>
-      <span>Recuperando anotaciones y antecedentes…</span>
+      Cargando Hoja de Vida…
     </section>
 
     <template v-else-if="resumen">
-      <header class="life-record-header no-print">
-        <div>
-          <span class="hv-eyebrow">Hoja de Vida</span>
-          <h1>{{ nombreCalificado }}</h1>
-          <p>{{ resumen.run }} · {{ resumen.categoria_nombre }} · {{ resumen.periodo_nombre }}</p>
+      <section v-if="borradores.length" class="hv-drafts-panel no-print">
+        <div class="hv-drafts-heading">
+          <div>
+            <strong>Borradores pendientes</strong>
+            <span>{{ borradores.length }} anotación(es) pendientes de estampar</span>
+          </div>
+          <Tag :value="String(borradores.length)" severity="warn" />
         </div>
 
-        <div class="life-record-actions">
-          <Tag :value="estadoVisual.texto" :severity="estadoVisual.severidad" />
-          <Button label="Actualizar" icon="pi pi-refresh" severity="secondary" outlined :loading="cargando" @click="cargar" />
-          <Button label="Imprimir" icon="pi pi-print" severity="secondary" outlined @click="imprimir" />
-          <Button label="Nueva anotación" icon="pi pi-plus" :disabled="esSoloLectura" @click="emit('nuevaAnotacion', hojaVidaId)" />
-        </div>
-      </header>
-
-      <Message v-if="error" severity="error" :closable="false" class="no-print">{{ error }}</Message>
-      <Message v-if="mensaje" severity="success" :closable="false" class="no-print">{{ mensaje }}</Message>
-      <Message v-if="esSoloLectura" severity="warn" :closable="false" class="no-print">
-        Esta Hoja de Vida está {{ resumen.hoja_vida_estado }} y se encuentra en modo solo lectura.
-      </Message>
-
-      <section class="life-record-summary no-print">
-        <Card>
-          <template #content>
-            <span>Anotaciones</span>
-            <strong>{{ resumen.total_anotaciones }}</strong>
-            <small>{{ resumen.total_borradores }} borrador(es)</small>
-          </template>
-        </Card>
-        <Card>
-          <template #content>
-            <span>Méritos</span>
-            <strong>{{ resumen.total_meritos }}</strong>
-            <small>Anotaciones favorables</small>
-          </template>
-        </Card>
-        <Card>
-          <template #content>
-            <span>Deméritos</span>
-            <strong>{{ resumen.total_demeritos }}</strong>
-            <small>Anotaciones desfavorables</small>
-          </template>
-        </Card>
-        <Card>
-          <template #content>
-            <span>Puntaje acumulado</span>
-            <strong>{{ puntajeAcumulado }}</strong>
-            <small>Resultado del período</small>
-          </template>
-        </Card>
+        <article v-for="borrador in borradores" :key="borrador.borrador_id" class="hv-draft-item">
+          <div>
+            <strong>{{ borrador.titulo_final || borrador.plantilla_nombre }}</strong>
+            <span>{{ fechaCorta(borrador.fecha_anotacion) }}</span>
+            <p>{{ borrador.cuerpo_final }}</p>
+          </div>
+          <div class="hv-draft-actions">
+            <Button label="Estampar" icon="pi pi-check" size="small" :disabled="modoSoloLectura || procesando" @click="abrirEstampado(borrador)" />
+            <Button label="Anular" icon="pi pi-times" severity="danger" outlined size="small" :disabled="modoSoloLectura || procesando" @click="anularBorrador(borrador)" />
+          </div>
+        </article>
       </section>
 
-      <Card v-if="borradores.length" class="drafts-panel no-print">
-        <template #title>
-          <button type="button" class="drafts-title" @click="mostrarBorradores = !mostrarBorradores">
-            <span><i class="pi pi-file-edit" /> Borradores pendientes</span>
-            <Tag :value="String(borradores.length)" severity="warn" />
-            <i :class="mostrarBorradores ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" />
-          </button>
-        </template>
-        <template v-if="mostrarBorradores" #content>
-          <div class="draft-list">
-            <article v-for="borrador in borradores" :key="borrador.borrador_id" class="draft-item">
-              <div class="draft-copy">
-                <div class="draft-heading">
-                  <strong>{{ borrador.titulo_final || borrador.plantilla_nombre }}</strong>
-                  <Tag :value="etiquetaEfecto(borrador.tipo_efecto_codigo)" :severity="severidadEfecto(borrador.tipo_efecto_codigo)" />
-                </div>
-                <p>{{ borrador.cuerpo_final }}</p>
-                <small>{{ formatoFecha(borrador.fecha_anotacion) }} · {{ borrador.concepto_nombre || 'Sin concepto' }}</small>
-              </div>
-              <div class="draft-actions">
-                <Button label="Estampar" icon="pi pi-check" size="small" :disabled="esSoloLectura || procesando" @click="abrirEstampado(borrador)" />
-                <Button label="Anular" icon="pi pi-times" size="small" severity="danger" outlined :disabled="esSoloLectura || procesando" @click="anularBorrador(borrador)" />
-              </div>
-            </article>
-          </div>
-        </template>
-      </Card>
-
-      <section class="official-sheet">
-        <header class="official-sheet-header">
-          <div class="official-sheet-brand">
-            <strong>HOJA DE VIDA</strong>
-            <span>Proceso de calificación</span>
-          </div>
-          <div class="official-sheet-status">
-            <span>Estado</span>
-            <strong>{{ resumen.hoja_vida_estado.toUpperCase() }}</strong>
-          </div>
-        </header>
-
-        <section class="official-person-grid">
-          <div class="wide">
-            <span>Grado, apellidos y nombres</span>
-            <strong>{{ nombreCalificado.toUpperCase() }}</strong>
-          </div>
-          <div>
-            <span>RUN</span>
-            <strong>{{ resumen.run }}</strong>
-          </div>
-          <div>
-            <span>Categoría</span>
-            <strong>{{ resumen.categoria_nombre }}</strong>
-          </div>
-          <div>
-            <span>Período</span>
-            <strong>{{ resumen.periodo_nombre }}</strong>
-          </div>
-          <div>
-            <span>Vigencia</span>
-            <strong>{{ formatoFecha(resumen.fecha_inicio) }} al {{ formatoFecha(resumen.fecha_termino) }}</strong>
-          </div>
-        </section>
-
-        <section class="annotation-register">
-          <header class="annotation-register-header">
-            <span>N.º</span>
-            <span>Fecha</span>
-            <span>Anotación</span>
-            <span>Puntaje</span>
+      <div class="hv-official-sheet-wrap">
+        <article class="hv-official-sheet">
+          <header class="hv-excel-topline">
+            <div class="hv-excel-unit">
+              <strong>{{ unidad || 'UNIDAD O REPARTICIÓN' }}</strong>
+              <small>(Unidad o Repartición)</small>
+            </div>
+            <div class="hv-excel-number">
+              <span>HOJA Nº</span>
+              <strong>01 (UNO)</strong>
+            </div>
           </header>
 
-          <article
-            v-for="anotacion in anotaciones"
-            :key="anotacion.anotacion_id"
-            class="annotation-row"
-          >
-            <strong>{{ anotacion.correlativo }}</strong>
-            <span>{{ formatoFecha(anotacion.fecha_anotacion) }}</span>
-            <div class="annotation-copy" :style="{ color: colorAnotacion(anotacion) }">
-              <div class="annotation-title-line">
-                <strong>{{ anotacion.titulo_final }}</strong>
-                <Tag :value="etiquetaEfecto(anotacion.tipo_efecto_codigo)" :severity="severidadEfecto(anotacion.tipo_efecto_codigo)" class="no-print" />
-              </div>
-              <p v-if="anotacion.concepto_nombre"><b>Concepto:</b> {{ anotacion.concepto_nombre }}</p>
-              <p>{{ anotacion.cuerpo_final }}</p>
-              <small v-if="lineaResolucion(anotacion)">{{ lineaResolucion(anotacion) }}</small>
+          <h2 class="hv-excel-title">H O J A&nbsp;&nbsp; D E&nbsp;&nbsp; V I D A</h2>
+
+          <section class="hv-excel-person">
+            <strong>DEL:</strong>
+            <div>
+              <span>{{ nombreCalificado }}</span>
+              <small>(GRADO, CATEGORÍA O ESCALAFÓN, APELLIDOS Y NOMBRES)</small>
             </div>
-            <strong class="annotation-score">{{ anotacion.puntaje_visual || '—' }}</strong>
-          </article>
+          </section>
 
-          <div v-if="anotaciones.length === 0" class="annotation-empty">
-            <i class="pi pi-book" />
-            <strong>No existen anotaciones estampadas</strong>
-            <span>Las anotaciones definitivas aparecerán aquí.</span>
-          </div>
-        </section>
+          <section class="hv-excel-period">
+            <span>DESDE EL</span><strong>{{ partesFecha(resumen.fecha_inicio).dia }}</strong>
+            <span>DE</span><strong>{{ partesFecha(resumen.fecha_inicio).mes }}</strong>
+            <span>DE</span><strong>{{ partesFecha(resumen.fecha_inicio).anio }}</strong>
+            <span>HASTA EL</span><strong>{{ partesFecha(resumen.fecha_termino).dia }}</strong>
+            <span>DE</span><strong>{{ partesFecha(resumen.fecha_termino).mes }}</strong>
+            <span>DE</span><strong>{{ partesFecha(resumen.fecha_termino).anio }}</strong>
+          </section>
 
-        <footer class="official-sheet-footer">
-          <div>
-            <span>Total anotaciones</span>
-            <strong>{{ resumen.total_anotaciones }}</strong>
-          </div>
-          <div>
-            <span>Puntaje acumulado</span>
-            <strong>{{ puntajeAcumulado }}</strong>
-          </div>
-          <div>
-            <span>Hoja de Vida N.º</span>
-            <strong>{{ resumen.hoja_vida_id }}</strong>
-          </div>
-        </footer>
-      </section>
+          <table class="hv-excel-table">
+            <colgroup>
+              <col class="hv-col-day"><col class="hv-col-month"><col class="hv-col-year">
+              <col class="hv-col-annotation"><col class="hv-col-signature"><col class="hv-col-signature">
+            </colgroup>
+            <thead>
+              <tr><th colspan="3">F E C H A</th><th rowspan="2">A N O T A C I O N E S</th><th colspan="2">F I R M A S</th></tr>
+              <tr><th>D</th><th>M</th><th>A</th><th>CALIFICADOR</th><th>CALIFICADO</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(anotacion, indice) in filasSuperiores" :key="`superior-${indice}`">
+                <td>{{ anotacion ? partesFecha(anotacion.fecha_anotacion).dia : '' }}</td>
+                <td>{{ anotacion ? partesFecha(anotacion.fecha_anotacion).mes.slice(0, 3) : '' }}</td>
+                <td>{{ anotacion ? partesFecha(anotacion.fecha_anotacion).anio.slice(-2) : '' }}</td>
+                <td class="hv-annotation-cell">
+                  <div v-if="anotacion" :style="{ color: colorAnotacion(anotacion) }">
+                    <span class="hv-row-number">{{ anotacion.correlativo }}.</span>
+                    <span class="hv-row-text">{{ textoAnotacion(anotacion) }}</span>
+                    <strong v-if="anotacion.puntaje_visual" class="hv-row-score">{{ anotacion.puntaje_visual }}</strong>
+                  </div>
+                </td>
+                <td></td><td></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="hv-excel-table hv-excel-table-second">
+            <colgroup>
+              <col class="hv-col-day"><col class="hv-col-month"><col class="hv-col-year">
+              <col class="hv-col-annotation"><col class="hv-col-signature"><col class="hv-col-signature">
+            </colgroup>
+            <thead>
+              <tr><th colspan="3">F E C H A</th><th rowspan="2">A N O T A C I O N E S</th><th colspan="2">F I R M A S</th></tr>
+              <tr><th>D</th><th>M</th><th>A</th><th>CALIFICADOR</th><th>CALIFICADO</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(anotacion, indice) in filasInferiores" :key="`inferior-${indice}`">
+                <td>{{ anotacion ? partesFecha(anotacion.fecha_anotacion).dia : '' }}</td>
+                <td>{{ anotacion ? partesFecha(anotacion.fecha_anotacion).mes.slice(0, 3) : '' }}</td>
+                <td>{{ anotacion ? partesFecha(anotacion.fecha_anotacion).anio.slice(-2) : '' }}</td>
+                <td class="hv-annotation-cell">
+                  <div v-if="anotacion" :style="{ color: colorAnotacion(anotacion) }">
+                    <span class="hv-row-number">{{ anotacion.correlativo }}.</span>
+                    <span class="hv-row-text">{{ textoAnotacion(anotacion) }}</span>
+                    <strong v-if="anotacion.puntaje_visual" class="hv-row-score">{{ anotacion.puntaje_visual }}</strong>
+                  </div>
+                </td>
+                <td></td><td></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <footer class="hv-excel-footer">
+            <span>CODIGO 1-00-1480-00</span>
+            <span>IGM TALLERES GRAFICOS</span>
+          </footer>
+        </article>
+      </div>
     </template>
 
-    <section v-else class="life-record-loading">
-      <i class="pi pi-exclamation-triangle" />
-      <strong>No fue posible abrir la Hoja de Vida</strong>
-      <Button label="Volver" icon="pi pi-arrow-left" severity="secondary" @click="emit('volver')" />
-    </section>
-
-    <Dialog
-      v-model:visible="modalEstampado"
-      modal
-      header="Estampar anotación"
-      :style="{ width: 'min(560px, 92vw)' }"
-      :closable="!procesando"
-      @hide="cerrarEstampado"
-    >
-      <div v-if="borradorSeleccionado" class="stamp-dialog">
-        <Message severity="info" :closable="false">
-          Revise el origen antes de convertir el borrador en una anotación definitiva.
-        </Message>
-        <div class="stamp-preview">
-          <strong>{{ borradorSeleccionado.titulo_final || borradorSeleccionado.plantilla_nombre }}</strong>
-          <p>{{ borradorSeleccionado.cuerpo_final }}</p>
-          <small>{{ lineaResolucion(borradorSeleccionado) }}</small>
-        </div>
-        <label>
-          <span>Origen de la anotación</span>
-          <Select v-model="estampado.origen" :options="opcionesOrigen" option-label="label" option-value="value" fluid />
-        </label>
+    <Dialog v-model:visible="modalEstampado" modal header="Estampar anotación" :style="{ width: 'min(520px, 92vw)' }" :closable="!procesando">
+      <div class="hv-stamp-dialog">
+        <p>{{ borradorSeleccionado?.titulo_final || borradorSeleccionado?.plantilla_nombre }}</p>
+        <label for="origen-anotacion">Origen de la anotación</label>
+        <Select id="origen-anotacion" v-model="estampado.origen" :options="opcionesOrigen" option-label="label" option-value="value" fluid />
       </div>
-
       <template #footer>
-        <Button label="Cancelar" severity="secondary" outlined :disabled="procesando" @click="cerrarEstampado" />
+        <Button label="Cancelar" severity="secondary" text :disabled="procesando" @click="modalEstampado = false" />
         <Button label="Confirmar estampado" icon="pi pi-check" :loading="procesando" @click="confirmarEstampado" />
       </template>
     </Dialog>
-  </main>
+  </section>
 </template>
 
 <style scoped>
-.life-record-view { min-height: 100%; padding: 1.25rem; background: var(--hv-page); }
-.life-record-loading { min-height: 420px; display: grid; place-content: center; justify-items: center; gap: .7rem; color: var(--hv-muted); text-align: center; }
-.life-record-loading i { color: var(--hv-primary); font-size: 2rem; }
-.life-record-loading strong { color: var(--hv-text); }
-.life-record-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-.life-record-header h1 { margin: .25rem 0 0; font-size: 1.65rem; letter-spacing: -.03em; }
-.life-record-header p { margin: .45rem 0 0; color: var(--hv-muted); }
-.life-record-actions { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; flex-wrap: wrap; }
-.life-record-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; margin: 1rem 0; }
-.life-record-summary :deep(.p-card-content) { display: grid; gap: .28rem; padding: 1rem; }
-.life-record-summary span { color: var(--hv-muted); font-size: .78rem; }
-.life-record-summary strong { color: var(--hv-text); font-size: 1.35rem; }
-.life-record-summary small { color: var(--hv-muted); }
-.drafts-panel { margin-bottom: 1rem; }
-.drafts-title { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: .7rem; border: 0; padding: 0; color: var(--hv-text); background: transparent; text-align: left; }
-.drafts-title span { display: inline-flex; align-items: center; gap: .55rem; }
-.draft-list { display: grid; gap: .7rem; }
-.draft-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: .9rem; border: 1px solid var(--hv-border); border-radius: 10px; background: var(--hv-surface-soft); }
-.draft-copy { min-width: 0; }
-.draft-heading { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.draft-copy p { margin: .45rem 0; color: var(--hv-text); line-height: 1.5; }
-.draft-copy small { color: var(--hv-muted); }
-.draft-actions { display: flex; gap: .45rem; flex-shrink: 0; }
-.official-sheet { overflow: hidden; border: 1px solid #aeb9c8; border-radius: 12px; background: #fff; box-shadow: var(--hv-shadow-sm); }
-.official-sheet-header { display: flex; justify-content: space-between; align-items: stretch; border-bottom: 2px solid #1f2937; }
-.official-sheet-brand { display: grid; gap: .18rem; padding: 1rem 1.2rem; }
-.official-sheet-brand strong { font-size: 1.2rem; letter-spacing: .06em; }
-.official-sheet-brand span { color: #5f6b7a; font-size: .8rem; }
-.official-sheet-status { min-width: 150px; display: grid; place-content: center; padding: .8rem 1rem; border-left: 1px solid #9aa5b4; text-align: center; }
-.official-sheet-status span { color: #667085; font-size: .72rem; text-transform: uppercase; }
-.official-sheet-status strong { margin-top: .2rem; }
-.official-person-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; border-bottom: 2px solid #1f2937; }
-.official-person-grid > div { min-height: 70px; display: grid; align-content: center; gap: .3rem; padding: .7rem .85rem; border-right: 1px solid #9aa5b4; border-bottom: 1px solid #9aa5b4; }
-.official-person-grid > div:nth-child(3n) { border-right: 0; }
-.official-person-grid .wide { grid-column: span 2; }
-.official-person-grid span { color: #667085; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
-.official-person-grid strong { font-size: .88rem; }
-.annotation-register-header, .annotation-row { display: grid; grid-template-columns: 62px 110px minmax(0,1fr) 90px; }
-.annotation-register-header { color: #fff; background: #17365d; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
-.annotation-register-header span { padding: .65rem; border-right: 1px solid rgba(255,255,255,.35); }
-.annotation-row { min-height: 110px; border-bottom: 1px solid #aeb9c8; }
-.annotation-row > * { padding: .75rem; border-right: 1px solid #aeb9c8; }
-.annotation-row > *:last-child { border-right: 0; }
-.annotation-row > strong:first-child, .annotation-row > span { display: grid; place-content: start center; color: #475467; font-size: .78rem; }
-.annotation-copy { min-width: 0; line-height: 1.45; }
-.annotation-title-line { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }
-.annotation-copy p { margin: .35rem 0; white-space: pre-line; }
-.annotation-copy small { display: block; margin-top: .5rem; font-style: italic; }
-.annotation-score { display: grid; place-content: center; text-align: center; }
-.annotation-empty { min-height: 250px; display: grid; place-content: center; justify-items: center; gap: .45rem; color: #667085; text-align: center; }
-.annotation-empty i { color: var(--hv-primary); font-size: 1.8rem; }
-.official-sheet-footer { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 2px solid #1f2937; }
-.official-sheet-footer > div { display: grid; gap: .2rem; padding: .8rem 1rem; border-right: 1px solid #9aa5b4; }
-.official-sheet-footer > div:last-child { border-right: 0; }
-.official-sheet-footer span { color: #667085; font-size: .7rem; text-transform: uppercase; }
-.stamp-dialog { display: grid; gap: 1rem; }
-.stamp-preview { padding: 1rem; border: 1px solid var(--hv-border); border-radius: 10px; background: var(--hv-surface-soft); }
-.stamp-preview p { white-space: pre-line; }
-.stamp-dialog label { display: grid; gap: .45rem; font-weight: 700; }
-@media (max-width: 1000px) {
-  .life-record-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .official-person-grid { grid-template-columns: 1fr 1fr; }
-  .official-person-grid .wide { grid-column: span 2; }
-  .official-person-grid > div:nth-child(3n) { border-right: 1px solid #9aa5b4; }
-}
-@media (max-width: 760px) {
-  .life-record-view { padding: .8rem; }
-  .life-record-header, .draft-item { flex-direction: column; }
-  .life-record-actions, .draft-actions { width: 100%; justify-content: flex-start; }
-  .annotation-register { overflow-x: auto; }
-  .annotation-register-header, .annotation-row { min-width: 760px; }
-}
-@media (max-width: 560px) {
-  .life-record-summary { grid-template-columns: 1fr; }
-  .official-person-grid { grid-template-columns: 1fr; }
-  .official-person-grid .wide { grid-column: auto; }
-  .official-sheet-footer { grid-template-columns: 1fr; }
-}
-@media print {
-  .no-print { display: none !important; }
-  .life-record-view { padding: 0; background: #fff; }
-  .official-sheet { border-radius: 0; box-shadow: none; }
-  .annotation-row { break-inside: avoid; }
-}
+.hv-sheet-view{min-height:100%;padding:1.25rem;background:var(--hv-page)}
+.hv-sheet-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem}
+.hv-sheet-actions h1{margin:.2rem 0 0;font-size:1.75rem}.hv-sheet-actions p{margin:.35rem 0 0;color:var(--hv-muted)}
+.hv-sheet-action-buttons,.hv-draft-actions{display:flex;flex-wrap:wrap;gap:.55rem}
+.hv-sheet-notice{margin-bottom:.8rem;padding:.8rem 1rem;border-radius:8px;font-size:.9rem}
+.hv-sheet-notice-error{color:#8a1c1c;background:#fff1f1;border:1px solid #f2b8b8}.hv-sheet-notice-success{color:#17633f;background:#edfdf5;border:1px solid #a7e3c5}
+.hv-sheet-loading{display:flex;align-items:center;justify-content:center;gap:.65rem;min-height:280px;color:var(--hv-muted)}
+.hv-drafts-panel{margin-bottom:1rem;padding:1rem;border:1px solid var(--hv-border);border-radius:12px;background:#fff}
+.hv-drafts-heading,.hv-draft-item{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.hv-drafts-heading>div,.hv-draft-item>div:first-child{display:grid;gap:.25rem}.hv-drafts-heading span,.hv-draft-item span,.hv-draft-item p{color:var(--hv-muted);font-size:.84rem}
+.hv-draft-item{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--hv-border)}.hv-draft-item p{margin:.2rem 0 0;white-space:pre-wrap}
+.hv-official-sheet-wrap{overflow:auto;padding:1rem;border-radius:12px;background:#cfd4da}
+.hv-official-sheet{width:100%;min-width:980px;max-width:1180px;margin:0 auto;padding:24px 28px 18px;color:#111;background:#fff;box-shadow:0 16px 44px rgba(15,23,42,.18);font-family:Arial,Helvetica,sans-serif}
+.hv-excel-topline{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}.hv-excel-unit{display:grid;min-width:340px;text-align:center}
+.hv-excel-unit strong{padding-bottom:3px;border-bottom:1px solid #111;font-size:14px}.hv-excel-unit small{margin-top:3px;font-size:10px}
+.hv-excel-number{display:grid;grid-template-columns:auto 92px;gap:10px;align-items:center;font-size:13px}.hv-excel-number strong{padding:4px 6px;border:1px solid #111;text-align:center}
+.hv-excel-title{margin:14px 0 22px;text-align:center;text-decoration:underline;font-size:19px;letter-spacing:.22em}
+.hv-excel-person{display:grid;grid-template-columns:68px 1fr;gap:8px;align-items:end;margin-bottom:20px}.hv-excel-person>div{display:grid;text-align:center}
+.hv-excel-person span{padding:0 8px 3px;border-bottom:1px solid #111;font-size:14px;font-weight:700}.hv-excel-person small{margin-top:3px;font-size:9px}
+.hv-excel-period{display:grid;grid-template-columns:auto 42px auto minmax(90px,1fr) auto 56px auto 42px auto minmax(90px,1fr) auto 56px;gap:6px;align-items:end;margin-bottom:18px;font-size:12px;white-space:nowrap}
+.hv-excel-period strong{min-height:19px;padding:2px 4px;border-bottom:1px solid #111;text-align:center}
+.hv-excel-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px}.hv-excel-table-second{margin-top:16px}
+.hv-col-day,.hv-col-month,.hv-col-year{width:4.4%}.hv-col-annotation{width:60.8%}.hv-col-signature{width:13%}
+.hv-excel-table th,.hv-excel-table td{border:1px solid #111}.hv-excel-table th{height:25px;padding:3px;text-align:center;vertical-align:middle;font-weight:700;letter-spacing:.08em}
+.hv-excel-table tbody td{height:22px;padding:2px 3px;text-align:center;vertical-align:top}.hv-annotation-cell{text-align:left!important}
+.hv-annotation-cell>div{display:grid;grid-template-columns:28px 1fr auto;gap:4px;align-items:start;white-space:pre-wrap;line-height:1.25}.hv-row-number{font-weight:700}.hv-row-text{overflow-wrap:anywhere}.hv-row-score{white-space:nowrap}
+.hv-excel-footer{display:flex;justify-content:space-between;margin-top:10px;font-size:9px}.hv-stamp-dialog{display:grid;gap:.75rem}.hv-stamp-dialog p{margin:0;color:var(--hv-muted)}.hv-stamp-dialog label{font-weight:700}
+@media(max-width:900px){.hv-sheet-actions,.hv-drafts-heading,.hv-draft-item{align-items:stretch;flex-direction:column}}
+@media print{:global(body){overflow:visible!important;background:#fff!important}:global(.hv-sidebar),:global(.hv-topbar),:global(.hv-global-statusbar),.no-print{display:none!important}.hv-sheet-view,.hv-official-sheet-wrap{padding:0;overflow:visible;background:#fff}.hv-official-sheet{width:100%;min-width:0;max-width:none;margin:0;padding:0;box-shadow:none}@page{size:landscape;margin:10mm}}
 </style>
