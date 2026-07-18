@@ -7,6 +7,7 @@ import NewApp from './NewApp.vue'
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
 import './styles/integration-overrides.css'
+import './styles/resolution-layout-overrides.css'
 
 const app = createApp(NewApp)
 
