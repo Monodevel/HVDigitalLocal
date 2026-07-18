@@ -1,0 +1,153 @@
+.hv-page-with-status {
+  min-height: 100vh;
+  padding: 2rem 2rem 3.5rem;
+  overflow: auto;
+}
+
+.hv-app-shell-with-status {
+  height: 100vh;
+  padding-bottom: 34px;
+  overflow: hidden;
+}
+
+.hv-period-row .p-card-content {
+  padding: 0;
+}
+
+.hv-period-row-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.hv-period-title-line {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .35rem;
+}
+
+.hv-period-row-content p {
+  margin: .4rem 0 0;
+  color: var(--hv-muted);
+  font-size: .85rem;
+}
+
+.hv-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) minmax(170px, .7fr) minmax(190px, .8fr) auto auto;
+  gap: .75rem;
+  margin-bottom: 1rem;
+  padding: .9rem;
+  border: 1px solid var(--hv-border);
+  border-radius: var(--hv-radius-md);
+  background: var(--hv-surface);
+}
+
+.hv-search-control {
+  position: relative;
+  display: block;
+}
+
+.hv-search-control > i {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  color: #98a2b3;
+}
+
+.hv-search-control input {
+  padding-left: 2.5rem;
+}
+
+.hv-sidebar-context {
+  display: grid;
+  gap: .65rem;
+  margin-top: auto;
+  padding: 1rem;
+  border-top: 1px solid rgba(255,255,255,.1);
+}
+
+.hv-sidebar-context small {
+  color: #a9bdd5;
+}
+
+.hv-sidebar-context .hv-sidebar-logout {
+  margin: 0;
+}
+
+.hv-module-host {
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--hv-page);
+}
+
+.hv-module-host > main,
+.hv-module-host > section,
+.hv-module-host > div {
+  min-height: 100%;
+}
+
+.hv-module-back {
+  position: sticky;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  margin: 12px;
+}
+
+.hv-statusbar-app {
+  position: fixed;
+  left: 248px;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+
+.hv-workspace {
+  height: calc(100vh - 34px);
+  min-height: 0;
+}
+
+@media (max-width: 1100px) {
+  .hv-filter-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hv-search-control {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .hv-statusbar-app {
+    left: 76px;
+  }
+}
+
+@media (max-width: 680px) {
+  .hv-page-with-status {
+    padding: 1rem 1rem 5.5rem;
+  }
+
+  .hv-period-row-content {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hv-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .hv-search-control {
+    grid-column: auto;
+  }
+
+  .hv-global-statusbar {
+    min-height: auto;
+  }
+}
