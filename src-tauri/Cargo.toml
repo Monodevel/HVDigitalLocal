@@ -1,16 +1,13 @@
 [package]
 name = "hvdigital"
 version = "0.1.0"
-description = "Aplicacion para el control de Hojas de Vida de forma Digital"
-authors = ["you"]
+description = "Aplicación local para la gestión digital de hojas de vida y procesos de calificación"
+authors = ["Marco Miranda"]
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# El sufijo `_lib` evita que el nombre de la biblioteca entre en conflicto
+# con el binario de la aplicación, especialmente durante la compilación en Windows.
 name = "hvdigital_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -24,4 +21,3 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-dialog = "2"
-
