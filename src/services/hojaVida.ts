@@ -261,7 +261,7 @@ export async function obtenerUnidadSistema(): Promise<string> {
   const db = await obtenerBaseDatos()
   const filas = await db.select<Array<{ unidad_nombre: string | null }>>(`
     SELECT unidad_nombre
-    FROM configuracion_inicial
+    FROM vw_estado_configuracion_inicial
     WHERE id = 1
     LIMIT 1
   `)
