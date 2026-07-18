@@ -70,55 +70,57 @@ export async function listarCalificadosUi(periodoId: number): Promise<Calificado
     nombres: string | null
     apellido_paterno: string | null
     apellido_materno: string | null
-    nombre_completo: string | null
     run: string | null
-    unidad: string | null
-    estado: string | null
+    unidad_nombre: string | null
+    expediente_estado: string | null
+    persona_activa: number | null
   }>>(`
     SELECT
       ex.id AS expediente_id,
-      hv.id AS hoja_vida_id,
-      ex.persona_id,
-      COALESCE(r.grado_calidad_abreviatura, r.grado, '') AS grado,
-      r.nombres,
-      r.apellido_paterno,
-      r.apellido_materno,
-      r.nombre_completo,
-      COALESCE(r.run, r.rut, '') AS run,
-      COALESCE(r.unidad, r.unidad_nombre, '') AS unidad,
-      ex.estado
+      ehv.hoja_vida_id,
+      p.id AS persona_id,
+      COALESCE(g.abreviatura, cp.abreviatura, g.nombre, cp.nombre, '') AS grado,
+      p.nombres,
+      p.apellido_paterno,
+      p.apellido_materno,
+      p.run,
+      d.unidad_nombre,
+      ex.estado AS expediente_estado,
+      p.activo AS persona_activa
     FROM expedientes_calificacion ex
-    LEFT JOIN hojas_vida hv
-      ON hv.persona_id = ex.persona_id
-      AND hv.periodo_id = ex.periodo_id
-      AND hv.categoria_id = ex.categoria_id
-    LEFT JOIN vw_hoja_vida_resumen r
-      ON r.hoja_vida_id = hv.id
+    INNER JOIN designaciones_calificacion d
+      ON d.id = ex.designacion_id
+    INNER JOIN personas p
+      ON p.id = ex.persona_id
+    LEFT JOIN grados g
+      ON g.id = d.grado_id_inicio
+    LEFT JOIN calidades_personal cp
+      ON cp.id = d.calidad_personal_id_inicio
+    LEFT JOIN expediente_hojas_vida ehv
+      ON ehv.expediente_id = ex.id
     WHERE ex.periodo_id = ?
-      AND (ex.estado IS NULL OR UPPER(ex.estado) <> 'ANULADO')
+      AND UPPER(ex.estado) <> 'ANULADO'
+      AND UPPER(d.estado) <> 'ANULADA'
     ORDER BY
-      COALESCE(r.grado_calidad_abreviatura, r.grado, ''),
-      COALESCE(r.apellido_paterno, ''),
-      COALESCE(r.apellido_materno, ''),
-      COALESCE(r.nombres, '')
+      COALESCE(g.orden, 9999),
+      COALESCE(cp.orden, 9999),
+      p.apellido_paterno,
+      p.apellido_materno,
+      p.nombres
   `, [periodoId])
 
-  return filas.map(fila => {
-    const nombre = fila.nombre_completo || [
+  return filas.map(fila => ({
+    id: Number(fila.persona_id),
+    expedienteId: Number(fila.expediente_id),
+    hojaVidaId: fila.hoja_vida_id == null ? null : Number(fila.hoja_vida_id),
+    grado: fila.grado || 'Sin grado',
+    nombre: [
       fila.nombres,
       fila.apellido_paterno,
       fila.apellido_materno,
-    ].filter(Boolean).join(' ')
-
-    return {
-      id: Number(fila.persona_id),
-      expedienteId: Number(fila.expediente_id),
-      hojaVidaId: fila.hoja_vida_id == null ? null : Number(fila.hoja_vida_id),
-      grado: fila.grado || 'Sin grado',
-      nombre: nombre || 'Calificado sin nombre',
-      run: fila.run || 'Sin RUN',
-      unidad: fila.unidad || 'Sin unidad',
-      estado: String(fila.estado ?? 'ACTIVO').toUpperCase() === 'INACTIVO' ? 'INACTIVO' : 'ACTIVO',
-    }
-  })
+    ].filter(Boolean).join(' ') || 'Calificado sin nombre',
+    run: fila.run || 'Sin RUN',
+    unidad: fila.unidad_nombre || 'Sin unidad',
+    estado: fila.persona_activa === 0 ? 'INACTIVO' : 'ACTIVO',
+  }))
 }
