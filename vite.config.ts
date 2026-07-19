@@ -7,6 +7,24 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
+    {
+      name: "hvdigital-hc2-dual-view",
+      enforce: "pre",
+      transform(code, id) {
+        if (!id.replace(/\\/g, "/").endsWith("/src/NewApp.vue")) {
+          return null;
+        }
+
+        const actualizado = code.replace(
+          "./views/hc2/Hc2View.vue",
+          "./views/hc2/Hc2DualView.vue",
+        );
+
+        return actualizado === code
+          ? null
+          : { code: actualizado, map: null };
+      },
+    },
     vue()
   ],
 
