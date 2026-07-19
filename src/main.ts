@@ -6,6 +6,7 @@ import NewApp from './NewApp.vue'
 import { habilitarNotificacionesDeInterfaz } from './services/notificacionesNativas'
 import { habilitarMenuNativo } from './services/menuNativo'
 import { habilitarFotografiasEnExpediente } from './services/fotografiaExpedienteUi'
+import { habilitarGestionPeriodos } from './services/periodosUi'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -15,6 +16,7 @@ import './styles/evint-layout-overrides.css'
 import './styles/annotation-layout-overrides.css'
 import './styles/fotografias-calificados.css'
 import './styles/hc2-floating-actions.css'
+import './styles/periodos-gestion.css'
 
 const app = createApp(NewApp)
 
@@ -44,5 +46,6 @@ app.use(PrimeVue, {
 
 app.mount('#app')
 void habilitarMenuNativo()
+void habilitarGestionPeriodos()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
