@@ -10,6 +10,7 @@ import './styles/hvdigital-theme.css'
 import './styles/integration-overrides.css'
 import './styles/resolution-layout-overrides.css'
 import './styles/evint-layout-overrides.css'
+import './styles/annotation-layout-overrides.css'
 
 const app = createApp(NewApp)
 
