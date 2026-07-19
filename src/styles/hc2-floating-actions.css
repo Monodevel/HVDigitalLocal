@@ -1,0 +1,75 @@
+/* HC2: elimina el encabezado descriptivo y deja las acciones flotantes. */
+.hc2-dual-view {
+  position: relative;
+}
+
+.hc2-dual-header {
+  position: fixed;
+  top: 96px;
+  right: 24px;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: auto;
+  margin: 0;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--hv-border, #dbe3ef);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(16px);
+}
+
+.hc2-dual-header > div:first-child {
+  display: none !important;
+}
+
+.hc2-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hc2-header-actions .p-selectbutton {
+  display: flex;
+}
+
+.hc2-header-actions .p-button,
+.hc2-header-actions .p-togglebutton {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.hc2-header-actions .p-button-label,
+.hc2-header-actions .p-togglebutton-label {
+  font-size: 0.82rem;
+}
+
+/* Evita que el encabezado reserve espacio en la vista. */
+.hc2-operational-view,
+.hc2-dual-view > .hc2-notice,
+.hc2-dual-view > .hc2-loading {
+  margin-top: 0;
+}
+
+@media (max-width: 980px) {
+  .hc2-dual-header {
+    top: auto;
+    right: 12px;
+    bottom: 18px;
+    left: 12px;
+    justify-content: center;
+    overflow-x: auto;
+  }
+
+  .hc2-header-actions {
+    width: max-content;
+  }
+}
+
+@media print {
+  .hc2-dual-header {
+    display: none !important;
+  }
+}
