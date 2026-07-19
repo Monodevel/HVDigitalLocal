@@ -4,6 +4,7 @@ import Aura from '@primeuix/themes/aura'
 
 import NewApp from './NewApp.vue'
 import { habilitarNotificacionesDeInterfaz } from './services/notificacionesNativas'
+import { habilitarMenuBarraSuperior } from './services/topbarApplicationMenu'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -11,6 +12,7 @@ import './styles/integration-overrides.css'
 import './styles/resolution-layout-overrides.css'
 import './styles/evint-layout-overrides.css'
 import './styles/annotation-layout-overrides.css'
+import './styles/topbar-menu.css'
 
 const app = createApp(NewApp)
 
@@ -40,3 +42,4 @@ app.use(PrimeVue, {
 
 app.mount('#app')
 habilitarNotificacionesDeInterfaz()
+habilitarMenuBarraSuperior()
