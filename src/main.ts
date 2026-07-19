@@ -14,6 +14,7 @@ import './styles/resolution-layout-overrides.css'
 import './styles/evint-layout-overrides.css'
 import './styles/annotation-layout-overrides.css'
 import './styles/fotografias-calificados.css'
+import './styles/hc2-floating-actions.css'
 
 const app = createApp(NewApp)
 
