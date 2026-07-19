@@ -179,6 +179,12 @@ pub fn run() {
             sql: include_str!("../migrations/026_hc1_ham_hapsem.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 26,
+            description: "agregar_fotografia_calificados",
+            sql: include_str!("../migrations/027_fotografia_calificados.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
