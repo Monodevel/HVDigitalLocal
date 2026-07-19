@@ -1,0 +1,52 @@
+/* Anotaciones: formulario completo arriba y previsualización al final. */
+.hv-module-host .page:has(.card.preview) .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.hv-module-host .page:has(.card.preview) .form,
+.hv-module-host .page:has(.card.preview) .preview {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.hv-module-host .page:has(.card.preview) .preview {
+  margin-top: .15rem;
+  border-radius: var(--hv-radius-md);
+  box-shadow: var(--hv-shadow-sm);
+}
+
+.hv-module-host .page:has(.card.preview) .preview::before {
+  display: block;
+  padding: .85rem 1rem;
+  color: var(--hv-muted);
+  background: var(--hv-surface-soft);
+  border-bottom: 1px solid var(--hv-border);
+  content: 'Previsualización de la anotación';
+  font-size: .78rem;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+
+@media (min-width: 980px) {
+  .hv-module-host .page:has(.card.preview) .form .section:first-child,
+  .hv-module-host .page:has(.card.preview) .form .section:nth-child(2) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hv-module-host .page:has(.card.preview) .form .section:first-child .section-heading,
+  .hv-module-host .page:has(.card.preview) .form .section:first-child .sheet-summary,
+  .hv-module-host .page:has(.card.preview) .form .section:nth-child(2) .section-heading,
+  .hv-module-host .page:has(.card.preview) .form .section:nth-child(2) .help {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 979px) {
+  .hv-module-host .page:has(.card.preview) .form .section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
