@@ -7,6 +7,7 @@ import { habilitarNotificacionesDeInterfaz } from './services/notificacionesNati
 import { habilitarMenuNativo } from './services/menuNativo'
 import { habilitarFotografiasEnExpediente } from './services/fotografiaExpedienteUi'
 import { habilitarGestionPeriodos } from './services/periodosUi'
+import { habilitarNotasTareas } from './services/notasTareasUi'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -17,6 +18,7 @@ import './styles/annotation-layout-overrides.css'
 import './styles/fotografias-calificados.css'
 import './styles/hc2-floating-actions.css'
 import './styles/periodos-gestion.css'
+import './styles/notas-tareas.css'
 
 const app = createApp(NewApp)
 
@@ -49,3 +51,4 @@ void habilitarMenuNativo()
 void habilitarGestionPeriodos()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
+habilitarNotasTareas()
