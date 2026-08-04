@@ -17,7 +17,7 @@ function abrirPanel(): void {
   if (contenedorPanel?.isConnected) return
 
   const host = document.createElement('div')
-  host.id = 'hvdigital-notas-tareas-host'
+  host.id = 'hvdigital-notas-calificador-host'
   document.body.appendChild(host)
 
   aplicacionPanel = createApp({
@@ -32,7 +32,7 @@ function crearBoton(): HTMLButtonElement {
   boton.type = 'button'
   boton.className = 'hv-sidebar-item hv-sidebar-notas-tareas'
   boton.dataset.notasTareas = 'true'
-  boton.innerHTML = '<i class="pi pi-list-check"></i><span>Notas y tareas</span>'
+  boton.innerHTML = '<i class="pi pi-sticky-note"></i><span>Notas del calificador</span>'
   boton.addEventListener('click', abrirPanel)
   return boton
 }
