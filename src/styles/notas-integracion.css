@@ -1,0 +1,159 @@
+/* Integra Notas del calificador al shell principal de HVDigital. */
+.nt-overlay {
+  position: fixed;
+  inset: 70px 0 34px 248px;
+  z-index: 80;
+  overflow: auto;
+  background: var(--hv-page);
+}
+
+.nt-shell {
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  margin: 0;
+  padding: 1.35rem;
+  align-content: start;
+}
+
+.nt-header {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  margin-bottom: .25rem;
+}
+
+.nt-header h1 {
+  margin-top: .25rem;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  letter-spacing: -.035em;
+}
+
+.nt-header p {
+  margin-top: .5rem;
+}
+
+.nt-eyebrow {
+  color: var(--hv-primary);
+  letter-spacing: .1em;
+}
+
+.nt-header-actions {
+  align-self: flex-start;
+}
+
+.nt-button {
+  border-radius: var(--hv-radius-sm);
+  font-weight: 650;
+}
+
+.nt-button-primary {
+  background: var(--hv-primary);
+  box-shadow: none;
+}
+
+.nt-button-primary:hover:not(:disabled) {
+  background: var(--hv-primary-hover);
+}
+
+.nt-button-secondary,
+.nt-icon-button {
+  color: var(--hv-muted);
+  background: var(--hv-surface);
+  border-color: var(--hv-border);
+}
+
+.nt-summary article,
+.nt-toolbar,
+.nt-card,
+.nt-loading,
+.nt-empty {
+  border-color: var(--hv-border);
+  border-radius: var(--hv-radius-md);
+  background: var(--hv-surface);
+  box-shadow: var(--hv-shadow-sm);
+}
+
+.nt-summary article > i {
+  color: var(--hv-primary);
+  background: var(--hv-primary-soft);
+}
+
+.nt-toolbar {
+  padding: .9rem;
+}
+
+.nt-toolbar input,
+.nt-toolbar select,
+.nt-form input,
+.nt-form select,
+.nt-form textarea {
+  border-color: var(--hv-border);
+  border-radius: var(--hv-radius-sm);
+  color: var(--hv-text);
+  background: var(--hv-surface);
+}
+
+.nt-card {
+  box-shadow: none;
+}
+
+.nt-card:hover {
+  transform: none;
+  border-color: #c7d5e5;
+  box-shadow: var(--hv-shadow-sm);
+}
+
+.nt-card-main p {
+  color: var(--hv-muted);
+}
+
+.nt-card-actions button {
+  color: var(--hv-muted);
+  background: var(--hv-surface-soft);
+  border-color: var(--hv-border);
+}
+
+.nt-form {
+  border-color: var(--hv-border);
+  border-radius: var(--hv-radius-lg);
+  background: var(--hv-surface);
+  box-shadow: var(--hv-shadow-md);
+}
+
+.nt-readonly {
+  color: #8a4b08;
+  background: #fff7e6;
+  border-color: #f1d39a;
+}
+
+.hv-sidebar-notas-tareas.hv-sidebar-item-active {
+  color: #fff;
+  background: var(--hv-primary);
+  box-shadow: 0 6px 15px rgba(37, 99, 235, .24);
+}
+
+@media (max-width: 860px) {
+  .nt-overlay {
+    inset: 70px 0 34px 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .nt-shell {
+    padding: 1rem;
+  }
+
+  .nt-header {
+    gap: 1rem;
+  }
+}
+
+@media print {
+  .nt-overlay {
+    position: static;
+    inset: auto;
+  }
+}
