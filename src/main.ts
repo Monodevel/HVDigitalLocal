@@ -19,6 +19,7 @@ import './styles/fotografias-calificados.css'
 import './styles/hc2-floating-actions.css'
 import './styles/periodos-gestion.css'
 import './styles/notas-tareas.css'
+import './styles/notas-integracion.css'
 
 const app = createApp(NewApp)
 
