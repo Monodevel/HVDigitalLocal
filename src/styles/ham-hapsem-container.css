@@ -1,0 +1,146 @@
+/*
+ * Integración visual de HAM y HAPSEM con el shell actual de HVDigital.
+ *
+ * IMPORTANTE:
+ * Estas reglas actúan únicamente sobre el contenedor de las vistas.
+ * No modifican .sheet ni ningún elemento interno del documento oficial.
+ * Los selectores :has() permiten identificar cada instrumento por elementos
+ * exclusivos de su formulario sin introducir clases dentro del documento.
+ */
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout {
+  position: relative;
+  padding-top: .8rem;
+}
+
+/* Elimina el encabezado redundante "Instrumento de calificación / HAM|HAPSEM".
+ * Se conserva el bloque de acciones para transformarlo en control flotante.
+ */
+.hv-module-host:has(.lic-table) .hv-embedded-layout__heading,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__heading {
+  display: none !important;
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__header,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__header {
+  position: fixed;
+  top: 76px;
+  right: 24px;
+  z-index: 120;
+  width: auto;
+  margin: 0;
+  padding: 7px;
+  display: block;
+  background: color-mix(in srgb, var(--hv-surface, #fff) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hv-border, #d8dde4) 82%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .13);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions {
+  width: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions .actions,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions .actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+/* Botones compactos y flotantes, equivalentes a HC1/HC2. */
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions .hv-button,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions .hv-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  overflow: hidden;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions .hv-button::before,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions .hv-button::before {
+  font-family: 'primeicons';
+  font-size: 15px;
+  line-height: 1;
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions .hv-button-ghost::before,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions .hv-button-ghost::before {
+  content: '\e91a'; /* pi-arrow-left */
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions .hv-button-secondary::before,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions .hv-button-secondary::before {
+  content: '\e956'; /* pi-print */
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__actions .hv-button-primary::before,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__actions .hv-button-primary::before {
+  content: '\e98e'; /* pi-save */
+}
+
+.hv-module-host:has(.lic-table) .hv-embedded-layout__notice,
+.hv-module-host:has(.specialty-grid) .hv-embedded-layout__notice {
+  margin: 0 0 .75rem;
+}
+
+/* El escenario adopta el fondo y bordes del resto de las vistas de documento.
+ * .sheet queda deliberadamente fuera de estas reglas.
+ */
+.hv-module-host:has(.lic-table) .stage,
+.hv-module-host:has(.specialty-grid) .stage {
+  position: relative;
+  padding: 24px;
+  background: color-mix(in srgb, var(--hv-page, #f5f7fb) 68%, #dfe5ec);
+  border: 1px solid var(--hv-border, #d8dde4);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+@media (max-width: 760px) {
+  .hv-module-host:has(.lic-table) .hv-embedded-layout__header,
+  .hv-module-host:has(.specialty-grid) .hv-embedded-layout__header {
+    top: auto;
+    right: 14px;
+    bottom: 42px;
+    left: auto;
+  }
+
+  .hv-module-host:has(.lic-table) .stage,
+  .hv-module-host:has(.specialty-grid) .stage {
+    padding: 12px;
+  }
+}
+
+@media print {
+  .hv-module-host:has(.lic-table) .hv-embedded-layout__header,
+  .hv-module-host:has(.specialty-grid) .hv-embedded-layout__header {
+    display: none !important;
+  }
+
+  .hv-module-host:has(.lic-table) .stage,
+  .hv-module-host:has(.specialty-grid) .stage {
+    padding: 0;
+    background: #fff;
+    border: 0;
+    box-shadow: none;
+  }
+}
