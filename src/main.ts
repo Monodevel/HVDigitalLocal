@@ -8,6 +8,7 @@ import { habilitarMenuNativo } from './services/menuNativo'
 import { habilitarFotografiasEnExpediente } from './services/fotografiaExpedienteUi'
 import { habilitarGestionPeriodos } from './services/periodosUi'
 import { habilitarNotasTareas } from './services/notasTareasUi'
+import { habilitarSeriesResoluciones } from './services/seriesResolucionesUi'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -20,6 +21,7 @@ import './styles/hc2-floating-actions.css'
 import './styles/periodos-gestion.css'
 import './styles/notas-tareas.css'
 import './styles/notas-integracion.css'
+import './styles/resolution-series.css'
 
 const app = createApp(NewApp)
 
@@ -50,6 +52,7 @@ app.use(PrimeVue, {
 app.mount('#app')
 void habilitarMenuNativo()
 void habilitarGestionPeriodos()
+void habilitarSeriesResoluciones()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
 habilitarNotasTareas()
