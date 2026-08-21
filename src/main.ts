@@ -9,6 +9,7 @@ import { habilitarFotografiasEnExpediente } from './services/fotografiaExpedient
 import { habilitarGestionPeriodos } from './services/periodosUi'
 import { habilitarNotasTareas } from './services/notasTareasUi'
 import { habilitarSeriesResoluciones } from './services/seriesResolucionesUi'
+import { habilitarResolucionesExternas } from './services/resolucionesExternasUi'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -22,6 +23,7 @@ import './styles/periodos-gestion.css'
 import './styles/notas-tareas.css'
 import './styles/notas-integracion.css'
 import './styles/resolution-series.css'
+import './styles/resoluciones-externas.css'
 
 const app = createApp(NewApp)
 
@@ -53,6 +55,7 @@ app.mount('#app')
 void habilitarMenuNativo()
 void habilitarGestionPeriodos()
 void habilitarSeriesResoluciones()
+void habilitarResolucionesExternas()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
 habilitarNotasTareas()
