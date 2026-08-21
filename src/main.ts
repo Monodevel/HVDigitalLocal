@@ -26,6 +26,7 @@ import './styles/notas-integracion.css'
 import './styles/resolution-series.css'
 import './styles/resoluciones-externas.css'
 import './styles/cambio-password.css'
+import './styles/ham-hapsem-container.css'
 
 const app = createApp(NewApp)
 
