@@ -10,6 +10,7 @@ import { habilitarGestionPeriodos } from './services/periodosUi'
 import { habilitarNotasTareas } from './services/notasTareasUi'
 import { habilitarSeriesResoluciones } from './services/seriesResolucionesUi'
 import { habilitarResolucionesExternas } from './services/resolucionesExternasUi'
+import { habilitarCambioPasswordConfiguracion } from './services/cambioPasswordUi'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -24,6 +25,7 @@ import './styles/notas-tareas.css'
 import './styles/notas-integracion.css'
 import './styles/resolution-series.css'
 import './styles/resoluciones-externas.css'
+import './styles/cambio-password.css'
 
 const app = createApp(NewApp)
 
@@ -56,6 +58,7 @@ void habilitarMenuNativo()
 void habilitarGestionPeriodos()
 void habilitarSeriesResoluciones()
 void habilitarResolucionesExternas()
+habilitarCambioPasswordConfiguracion()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
 habilitarNotasTareas()
