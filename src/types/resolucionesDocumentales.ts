@@ -7,6 +7,10 @@ export type EstadoResolucion =
   | 'EMITIDA'
   | 'ANULADA'
 
+export type OrigenResolucion =
+  | 'INTERNA'
+  | 'EXTERNA'
+
 export type SeccionResolucion =
   | 'VISTOS'
   | 'CONSIDERANDO'
@@ -46,43 +50,33 @@ export interface ResolucionDocumento {
   resolucion_id: number
   hoja_vida_id: number
   persona_id: number
-
-  tipo_efecto_codigo:
-    TipoEfectoResolucion
-
+  tipo_efecto_codigo: TipoEfectoResolucion
   prefijo: string
   correlativo: number | null
   numero_visible: string | null
   fecha_documento: string
-
   concepto_id: number
   puntaje_id: number
-
   asunto: string | null
   antecedente_principal: string | null
   resuelvo_principal: string
   resuelvo_anotacion: string
   cierre: string
-
   firmante_nombre: string | null
   firmante_grado: string | null
   firmante_cargo: string | null
-
   estado: EstadoResolucion
   anotacion_id: number | null
-
   emitida_en: string | null
   anulada_en: string | null
   motivo_anulacion: string | null
-
   creada_en: string
   actualizada_en: string
-
+  origen_documento: OrigenResolucion
+  organismo_emisor: string | null
   run: string
   persona_nombre_completo: string
-  grado_calidad_abreviatura:
-    string | null
-
+  grado_calidad_abreviatura: string | null
   concepto_numero_actual: number
   concepto_nombre_actual: string
   puntaje_visual_actual: string
@@ -92,8 +86,7 @@ export interface ResolucionDocumento {
 export interface CrearBorradorResolucionInput {
   hojaVidaId: number
   personaId: number
-  tipoEfectoCodigo:
-    TipoEfectoResolucion
+  tipoEfectoCodigo: TipoEfectoResolucion
   fechaDocumento: string
   conceptoId: number
   puntajeId: number
@@ -110,6 +103,20 @@ export interface CrearBorradorResolucionInput {
 export interface ActualizarBorradorResolucionInput
   extends CrearBorradorResolucionInput {
   resolucionId: number
+}
+
+export interface CrearResolucionExternaInput {
+  hojaVidaId: number
+  personaId: number
+  tipoEfectoCodigo: TipoEfectoResolucion
+  numeroDocumento: string
+  fechaDocumento: string
+  organismoEmisor: string
+  conceptoId: number
+  puntajeId: number
+  asunto?: string
+  textoResolucion: string
+  resuelvoAnotacion: string
 }
 
 export interface ResultadoEmisionResolucion {
