@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Column from 'primevue/column'
@@ -56,11 +57,18 @@ type Pantalla =
   | 'RESOLUCION_FORMULARIO'
   | 'CONFIGURACION'
 
+interface ResultadoLoginLocal {
+  autenticado: boolean
+  usuario: string
+  mensaje: string
+}
+
 const versionAplicacion = '0.1.0'
 const pantalla = ref<Pantalla>('CARGANDO')
 const usuario = ref('')
 const contrasena = ref('')
 const recordarSesion = ref(false)
+const autenticando = ref(false)
 const errorLogin = ref('')
 const errorCarga = ref('')
 const baseDatosConectada = ref(false)
@@ -75,6 +83,8 @@ const textoBusqueda = ref('')
 const filtroGrado = ref<string | null>(null)
 const filtroUnidad = ref<string | null>(null)
 const cargandoDatos = ref(false)
+
+const CLAVE_USUARIO_RECORDADO = 'hvdigital.usuario-recordado'
 
 const modoSoloLectura = computed(
   () => periodoSeleccionado.value?.estado === 'CERRADO',
@@ -153,6 +163,13 @@ const menuItems = computed(() => {
 
 async function inicializarAplicacion(): Promise<void> {
   pantalla.value = 'CARGANDO'
+
+  const usuarioRecordado = localStorage.getItem(CLAVE_USUARIO_RECORDADO)
+  if (usuarioRecordado) {
+    usuario.value = usuarioRecordado
+    recordarSesion.value = true
+  }
+
   try {
     await obtenerEstadoConfiguracionInicial()
     baseDatosConectada.value = true
@@ -165,12 +182,34 @@ async function inicializarAplicacion(): Promise<void> {
 
 async function iniciarSesion(): Promise<void> {
   errorLogin.value = ''
-  if (!usuario.value.trim() || !contrasena.value.trim()) {
+
+  if (!usuario.value.trim() || !contrasena.value) {
     errorLogin.value = 'Ingrese usuario y contraseña.'
     return
   }
 
+  autenticando.value = true
+
   try {
+    const resultado = await invoke<ResultadoLoginLocal>('login_local', {
+      usuario: usuario.value,
+      password: contrasena.value,
+    })
+
+    if (!resultado.autenticado) {
+      errorLogin.value = resultado.mensaje || 'Acceso no autorizado.'
+      return
+    }
+
+    usuario.value = resultado.usuario
+    contrasena.value = ''
+
+    if (recordarSesion.value) {
+      localStorage.setItem(CLAVE_USUARIO_RECORDADO, resultado.usuario)
+    } else {
+      localStorage.removeItem(CLAVE_USUARIO_RECORDADO)
+    }
+
     const estado = await obtenerEstadoConfiguracionInicial()
     baseDatosConectada.value = true
 
@@ -183,8 +222,21 @@ async function iniciarSesion(): Promise<void> {
     pantalla.value = 'SELECCION_PERIODO'
   } catch (error) {
     console.error(error)
-    baseDatosConectada.value = false
-    errorLogin.value = 'No fue posible conectarse con la base de datos local.'
+    const mensaje = error instanceof Error ? error.message : String(error)
+
+    if (
+      mensaje.toLowerCase().includes('credencial') ||
+      mensaje.toLowerCase().includes('usuario') ||
+      mensaje.toLowerCase().includes('intento') ||
+      mensaje.toLowerCase().includes('bloque')
+    ) {
+      errorLogin.value = mensaje
+    } else {
+      baseDatosConectada.value = false
+      errorLogin.value = mensaje || 'No fue posible iniciar sesión.'
+    }
+  } finally {
+    autenticando.value = false
   }
 }
 
@@ -348,10 +400,17 @@ async function manejarMenu(id: string): Promise<void> {
 }
 
 function cerrarSesion(): void {
-  usuario.value = ''
   contrasena.value = ''
   periodoSeleccionado.value = null
   calificadoSeleccionado.value = null
+  menuActivo.value = 'calificados'
+  errorLogin.value = ''
+
+  if (!recordarSesion.value) {
+    usuario.value = ''
+    localStorage.removeItem(CLAVE_USUARIO_RECORDADO)
+  }
+
   pantalla.value = 'LOGIN'
 }
 
@@ -382,22 +441,22 @@ onMounted(() => void inicializarAplicacion())
     <section class="hv-login-form-panel">
       <div class="hv-login-form-wrapper">
         <div class="hv-login-heading">
-          <span class="hv-eyebrow">Acceso seguro</span>
+          <span class="hv-eyebrow">Acceso local</span>
           <h2>Iniciar sesión</h2>
           <p>Ingrese sus credenciales para continuar.</p>
         </div>
 
         <div class="hv-form-stack">
           <label for="usuario">Usuario</label>
-          <InputText id="usuario" v-model="usuario" autocomplete="username" placeholder="Ingrese su usuario" fluid />
+          <InputText id="usuario" v-model="usuario" autocomplete="username" placeholder="Ingrese su usuario" fluid :disabled="autenticando" />
           <label for="contrasena">Contraseña</label>
-          <Password input-id="contrasena" v-model="contrasena" :feedback="false" toggle-mask placeholder="Ingrese su contraseña" fluid @keyup.enter="iniciarSesion" />
+          <Password input-id="contrasena" v-model="contrasena" :feedback="false" toggle-mask placeholder="Ingrese su contraseña" fluid :disabled="autenticando" @keyup.enter="iniciarSesion" />
           <label class="hv-checkbox-label">
-            <input v-model="recordarSesion" type="checkbox">
-            <span>Recordarme</span>
+            <input v-model="recordarSesion" type="checkbox" :disabled="autenticando">
+            <span>Recordar usuario</span>
           </label>
           <small v-if="errorLogin" class="hv-error">{{ errorLogin }}</small>
-          <Button label="Iniciar sesión" icon="pi pi-sign-in" fluid @click="iniciarSesion" />
+          <Button label="Iniciar sesión" icon="pi pi-sign-in" fluid :loading="autenticando" :disabled="autenticando" @click="iniciarSesion" />
         </div>
       </div>
     </section>
