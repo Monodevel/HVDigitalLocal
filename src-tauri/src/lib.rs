@@ -1,3 +1,4 @@
+mod auth;
 mod backup;
 
 use tauri::{
@@ -189,6 +190,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            auth::login_local,
             backup::get_database_status,
             backup::create_database_backup,
             backup::restore_database_backup,
