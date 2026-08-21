@@ -48,149 +48,35 @@ pub fn run() {
             "#,
             kind: MigrationKind::Up,
         },
-        Migration {
-            version: 2,
-            description: "crear_catalogos_normativos",
-            sql: include_str!("../migrations/002_catalogos_normativos.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 3,
-            description: "crear_catalogo_grados_y_calidades",
-            sql: include_str!("../migrations/003_grados_calidades.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 4,
-            description: "crear_factores_normativos",
-            sql: include_str!("../migrations/004_factores_normativos.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 5,
-            description: "crear_catalogo_anotaciones",
-            sql: include_str!("../migrations/005_catalogo_anotaciones.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 6,
-            description: "crear_motor_plantillas_anotacion",
-            sql: include_str!("../migrations/006_motor_plantillas_anotacion.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 7,
-            description: "crear_puntajes_y_efectos_anotaciones",
-            sql: include_str!("../migrations/007_puntajes_y_efectos_anotaciones.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 8,
-            description: "crear_personas_hojas_vida_y_anotaciones",
-            sql: include_str!("../migrations/008_personas_hojas_vida_anotaciones.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 9,
-            description: "vincular_borrador_con_anotacion",
-            sql: include_str!("../migrations/009_vincular_borrador_anotacion.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 11,
-            description: "crear_configuracion_inicial",
-            sql: include_str!("../migrations/011_configuracion_inicial.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 12,
-            description: "crear_designaciones_expedientes_instrumentos",
-            sql: include_str!("../migrations/012_designaciones_expedientes.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 13,
-            description: "crear_panel_periodo",
-            sql: include_str!("../migrations/013_panel_periodo.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 14,
-            description: "crear_vista_expediente_detalle",
-            sql: include_str!("../migrations/014_expediente_detalle.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 15,
-            description: "crear_hoja_vida_operativa",
-            sql: include_str!("../migrations/015_hoja_vida_operativa.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 16,
-            description: "crear_evint",
-            sql: include_str!("../migrations/016_evint.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 18,
-            description: "crear_formato_oficial_evint",
-            sql: include_str!("../migrations/018_formato_oficial_evint.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 19,
-            description: "corregir_escala_y_crear_resultados_concepto_evint",
-            sql: include_str!("../migrations/020_corregir_escala_calculo_evint.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 20,
-            description: "crear_hoja_vida_cronologica",
-            sql: include_str!("../migrations/021_hoja_vida_cronologica.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 21,
-            description: "crear_resoluciones_anotaciones_libres",
-            sql: include_str!("../migrations/022_resoluciones_anotaciones_libres.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 22,
-            description: "crear_resoluciones_documentales",
-            sql: include_str!("../migrations/023_resoluciones_documentales.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 23,
-            description: "vincular_resolucion_documental_con_anotacion",
-            sql: include_str!("../migrations/024_vinculo_resolucion_documental_anotacion.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 24,
-            description: "crear_calificaciones_hc2",
-            sql: include_str!("../migrations/025_hc2_calificaciones.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 25,
-            description: "crear_documentos_hc1_ham_hapsem",
-            sql: include_str!("../migrations/026_hc1_ham_hapsem.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 26,
-            description: "agregar_fotografia_calificados",
-            sql: include_str!("../migrations/027_fotografia_calificados.sql"),
-            kind: MigrationKind::Up,
-        },
+        Migration { version: 2, description: "crear_catalogos_normativos", sql: include_str!("../migrations/002_catalogos_normativos.sql"), kind: MigrationKind::Up },
+        Migration { version: 3, description: "crear_catalogo_grados_y_calidades", sql: include_str!("../migrations/003_grados_calidades.sql"), kind: MigrationKind::Up },
+        Migration { version: 4, description: "crear_factores_normativos", sql: include_str!("../migrations/004_factores_normativos.sql"), kind: MigrationKind::Up },
+        Migration { version: 5, description: "crear_catalogo_anotaciones", sql: include_str!("../migrations/005_catalogo_anotaciones.sql"), kind: MigrationKind::Up },
+        Migration { version: 6, description: "crear_motor_plantillas_anotacion", sql: include_str!("../migrations/006_motor_plantillas_anotacion.sql"), kind: MigrationKind::Up },
+        Migration { version: 7, description: "crear_puntajes_y_efectos_anotaciones", sql: include_str!("../migrations/007_puntajes_y_efectos_anotaciones.sql"), kind: MigrationKind::Up },
+        Migration { version: 8, description: "crear_personas_hojas_vida_y_anotaciones", sql: include_str!("../migrations/008_personas_hojas_vida_anotaciones.sql"), kind: MigrationKind::Up },
+        Migration { version: 9, description: "vincular_borrador_con_anotacion", sql: include_str!("../migrations/009_vincular_borrador_anotacion.sql"), kind: MigrationKind::Up },
+        Migration { version: 11, description: "crear_configuracion_inicial", sql: include_str!("../migrations/011_configuracion_inicial.sql"), kind: MigrationKind::Up },
+        Migration { version: 12, description: "crear_designaciones_expedientes_instrumentos", sql: include_str!("../migrations/012_designaciones_expedientes.sql"), kind: MigrationKind::Up },
+        Migration { version: 13, description: "crear_panel_periodo", sql: include_str!("../migrations/013_panel_periodo.sql"), kind: MigrationKind::Up },
+        Migration { version: 14, description: "crear_vista_expediente_detalle", sql: include_str!("../migrations/014_expediente_detalle.sql"), kind: MigrationKind::Up },
+        Migration { version: 15, description: "crear_hoja_vida_operativa", sql: include_str!("../migrations/015_hoja_vida_operativa.sql"), kind: MigrationKind::Up },
+        Migration { version: 16, description: "crear_evint", sql: include_str!("../migrations/016_evint.sql"), kind: MigrationKind::Up },
+        Migration { version: 18, description: "crear_formato_oficial_evint", sql: include_str!("../migrations/018_formato_oficial_evint.sql"), kind: MigrationKind::Up },
+        Migration { version: 19, description: "corregir_escala_y_crear_resultados_concepto_evint", sql: include_str!("../migrations/020_corregir_escala_calculo_evint.sql"), kind: MigrationKind::Up },
+        Migration { version: 20, description: "crear_hoja_vida_cronologica", sql: include_str!("../migrations/021_hoja_vida_cronologica.sql"), kind: MigrationKind::Up },
+        Migration { version: 21, description: "crear_resoluciones_anotaciones_libres", sql: include_str!("../migrations/022_resoluciones_anotaciones_libres.sql"), kind: MigrationKind::Up },
+        Migration { version: 22, description: "crear_resoluciones_documentales", sql: include_str!("../migrations/023_resoluciones_documentales.sql"), kind: MigrationKind::Up },
+        Migration { version: 23, description: "vincular_resolucion_documental_con_anotacion", sql: include_str!("../migrations/024_vinculo_resolucion_documental_anotacion.sql"), kind: MigrationKind::Up },
+        Migration { version: 24, description: "crear_calificaciones_hc2", sql: include_str!("../migrations/025_hc2_calificaciones.sql"), kind: MigrationKind::Up },
+        Migration { version: 25, description: "crear_documentos_hc1_ham_hapsem", sql: include_str!("../migrations/026_hc1_ham_hapsem.sql"), kind: MigrationKind::Up },
+        Migration { version: 26, description: "agregar_fotografia_calificados", sql: include_str!("../migrations/027_fotografia_calificados.sql"), kind: MigrationKind::Up },
     ];
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             auth::login_local,
+            auth::cambiar_password_local,
             backup::get_database_status,
             backup::create_database_backup,
             backup::restore_database_backup,
@@ -278,16 +164,10 @@ pub fn run() {
                 let menu_id = event.id().as_ref();
 
                 match menu_id {
-                    "menu_salir" | "menu_salir_archivo" => {
-                        app_handle.exit(0);
-                    }
+                    "menu_salir" | "menu_salir_archivo" => app_handle.exit(0),
                     _ => {
-                        if let Err(error) =
-                            app_handle.emit("hvdigital-menu", menu_id.to_string())
-                        {
-                            eprintln!(
-                                "No fue posible emitir el evento del menú: {error}"
-                            );
+                        if let Err(error) = app_handle.emit("hvdigital-menu", menu_id.to_string()) {
+                            eprintln!("No fue posible emitir el evento del menú: {error}");
                         }
                     }
                 }
