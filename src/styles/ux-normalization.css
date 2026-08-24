@@ -1,0 +1,265 @@
+/* ============================================================
+   HVDigital — capa final de normalización UI/UX
+   Se importa al final para resolver inconsistencias heredadas sin
+   alterar los documentos institucionales (.sheet / vistas oficiales).
+   ============================================================ */
+
+:root {
+  --hv-control-height: 40px;
+  --hv-control-radius: 9px;
+  --hv-focus-ring: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
+/* Contenedores funcionales: una sola geometría visual */
+.hv-content,
+.hv-module-host > .app-layout,
+.hv-module-host > .layout-page,
+.hv-module-host > main:not(.sheet),
+.hv-module-host > section:not(.sheet) {
+  width: 100%;
+}
+
+.hv-module-host {
+  background: var(--hv-page);
+}
+
+/* PrimeVue: botones coherentes en toda la aplicación */
+.p-button {
+  min-height: var(--hv-control-height);
+  border-radius: var(--hv-control-radius);
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.p-button:focus-visible,
+.p-inputtext:focus,
+.p-select.p-focus,
+.p-textarea:focus,
+.p-password input:focus {
+  box-shadow: var(--hv-focus-ring) !important;
+}
+
+.p-button.p-button-sm,
+.p-button-sm {
+  min-height: 34px;
+  padding-block: .42rem;
+}
+
+/* Icon-only: evita botones enormes o sin alineación */
+.p-button.p-button-icon-only {
+  width: var(--hv-control-height);
+  min-width: var(--hv-control-height);
+  padding: 0;
+}
+
+/* Formularios PrimeVue */
+.p-inputtext,
+.p-select,
+.p-password-input,
+.p-textarea {
+  min-height: var(--hv-control-height);
+  border-radius: var(--hv-control-radius);
+}
+
+.p-select-label {
+  display: flex;
+  align-items: center;
+}
+
+/* Tarjetas funcionales */
+.hv-content > .p-card,
+.hv-module-host .p-card:not(.hv-document-card) {
+  border: 1px solid var(--hv-border);
+  border-radius: var(--hv-radius-md);
+  box-shadow: var(--hv-shadow-sm);
+}
+
+/* Tablas: densidad administrativa y acciones compactas */
+.p-datatable .p-datatable-header,
+.p-datatable .p-datatable-footer {
+  border-color: var(--hv-border);
+  background: var(--hv-surface-soft);
+}
+
+.p-datatable-thead > tr > th {
+  padding: .72rem .8rem;
+  color: #344054;
+  background: #f8fafc;
+  font-size: .76rem;
+  font-weight: 750;
+  letter-spacing: .015em;
+}
+
+.p-datatable-tbody > tr > td {
+  padding: .68rem .8rem;
+  vertical-align: middle;
+  font-size: .82rem;
+}
+
+.p-datatable-tbody > tr:hover {
+  background: #f8fbff;
+}
+
+/* Barras de filtro y acciones */
+.hv-filter-bar,
+.hv-filter-panel {
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(16, 32, 54, .025);
+}
+
+.hv-filter-bar > .p-button,
+.hv-filter-panel > .p-button {
+  white-space: nowrap;
+}
+
+/* Encabezados: evitar dobles títulos y excesos de espacio */
+.hv-page-heading,
+.hv-section-heading {
+  min-width: 0;
+}
+
+.hv-page-heading h1,
+.hv-section-heading h2 {
+  text-wrap: balance;
+}
+
+/* Barra superior: información de contexto, no otra barra de acciones */
+.hv-topbar {
+  min-height: 62px;
+}
+
+.hv-topbar > div:first-child strong {
+  font-size: .92rem;
+}
+
+.hv-topbar > div:first-child small {
+  font-size: .74rem;
+}
+
+/* Sidebar */
+.hv-sidebar-item,
+.hv-sidebar-logout {
+  min-height: 40px;
+  transition: background-color .15s ease, color .15s ease, transform .15s ease;
+}
+
+.hv-sidebar-item:hover {
+  transform: translateX(2px);
+}
+
+.hv-sidebar-item i,
+.hv-sidebar-logout i {
+  width: 1rem;
+  text-align: center;
+}
+
+/* Botones HTML heredados: apariencia coherente con PrimeVue.
+   No se aplica dentro de los documentos institucionales. */
+.hv-module-host :where(button:not(.p-button)) {
+  min-height: var(--hv-control-height);
+  border-radius: var(--hv-control-radius);
+  font-weight: 650;
+}
+
+.hv-module-host :where(.sheet, .institutional-sheet, .official-sheet, .document-sheet) button:not(.p-button) {
+  min-height: initial;
+  border-radius: initial;
+  font-weight: inherit;
+}
+
+/* Acciones flotantes de instrumentos: misma posición y superficie */
+.hv-floating-actions,
+.hc2-floating-actions,
+.ham-floating-actions,
+.hapsem-floating-actions,
+[class*="floating-actions"] {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .42rem;
+  border: 1px solid rgba(207, 215, 227, .9);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 10px 26px rgba(16, 32, 54, .12);
+  backdrop-filter: blur(10px);
+}
+
+/* El menú lateral ya proporciona navegación del expediente. */
+.hv-module-back {
+  display: none !important;
+}
+
+/* Evitar barras de acciones heredadas duplicadas cuando un instrumento
+   ya dispone de acciones flotantes. */
+.hv-module-host .legacy-toolbar:has(+ [class*="floating-actions"]),
+.hv-module-host .document-toolbar.legacy-toolbar {
+  display: none !important;
+}
+
+/* Mensajes y estados */
+.hv-error,
+.p-message-error {
+  line-height: 1.4;
+}
+
+.hv-global-statusbar {
+  min-height: 32px;
+  padding-inline: 1.1rem;
+}
+
+.hv-global-statusbar strong {
+  color: var(--hv-text);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .hv-app-shell {
+    grid-template-columns: 214px minmax(0, 1fr);
+  }
+
+  .hv-statusbar-app {
+    left: 214px;
+  }
+
+  .hv-filter-bar,
+  .hv-filter-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hv-search-control,
+  .hv-search-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .hv-page-heading {
+    flex-direction: column;
+    gap: .85rem;
+  }
+
+  .hv-page-heading > .p-button {
+    width: 100%;
+  }
+
+  .hv-filter-bar,
+  .hv-filter-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .hv-search-control,
+  .hv-search-field {
+    grid-column: auto;
+  }
+}
+
+/* Los formatos institucionales se afinan en una fase separada. */
+@media print {
+  .hv-sidebar,
+  .hv-topbar,
+  .hv-global-statusbar,
+  .hv-floating-actions,
+  [class*="floating-actions"] {
+    display: none !important;
+  }
+}
