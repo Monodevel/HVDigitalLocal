@@ -24,11 +24,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sqlx::{
     mysql::{MySqlPoolOptions, MySqlRow},
-    Column, MySql, MySqlPool, QueryBuilder, Row, TypeInfo, ValueRef,
+    Column, MySql, MySqlPool, Row, TypeInfo, ValueRef,
 };
 use tokio::{process::Command, sync::RwLock};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use url::Url;
 use uuid::Uuid;
 
@@ -52,10 +52,6 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (StatusCode::BAD_REQUEST, Json(self)).into_response()
     }
-}
-
-fn err<T: Into<String>>(value: T) -> ApiError {
-    ApiError { error: value.into() }
 }
 
 #[derive(Deserialize)]
@@ -178,18 +174,16 @@ async fn main() {
     axum::serve(listener, app).await.expect("El servidor finalizó inesperadamente");
 }
 
-async fn ejecutar_migraciones(pool: &MySqlPool) -> Result<(), sqlx::Error> {
+async fn ejecutar_migraciones(pool: &MySqlPool) -> Result<(), sqlx::migrate::MigrateError> {
     sqlx::migrate!("./migrations").run(pool).await
 }
 
 async fn asegurar_usuario_inicial(pool: &MySqlPool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "INSERT IGNORE INTO autenticacion_local (id, usuario, password_hash) VALUES (1, ?, ?)",
-    )
-    .bind(USUARIO_INICIAL)
-    .bind(PASSWORD_HASH_INICIAL)
-    .execute(pool)
-    .await?;
+    sqlx::query("INSERT IGNORE INTO autenticacion_local (id, usuario, password_hash) VALUES (1, ?, ?)")
+        .bind(USUARIO_INICIAL)
+        .bind(PASSWORD_HASH_INICIAL)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -199,14 +193,7 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         .await
         .is_ok();
     let status = if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-    (
-        status,
-        Json(Health {
-            ok,
-            service: "HVDigital Web API",
-            database: "MariaDB",
-        }),
-    )
+    (status, Json(Health { ok, service: "HVDigital Web API", database: "MariaDB" }))
 }
 
 async fn login(
@@ -214,25 +201,17 @@ async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, (StatusCode, Json<ApiError>)> {
     let row = sqlx::query("SELECT usuario, password_hash FROM autenticacion_local WHERE id = 1 LIMIT 1")
-        .fetch_one(&state.pool)
-        .await
-        .map_err(internal)?;
+        .fetch_one(&state.pool).await.map_err(internal)?;
     let usuario_guardado: String = row.try_get("usuario").map_err(internal)?;
     let hash_guardado: String = row.try_get("password_hash").map_err(internal)?;
-
     let hash = PasswordHash::new(&hash_guardado)
         .map_err(|_| unauthorized("La configuración de autenticación no es válida."))?;
-    let valida = Argon2::default()
-        .verify_password(req.password.as_bytes(), &hash)
-        .is_ok();
-
+    let valida = Argon2::default().verify_password(req.password.as_bytes(), &hash).is_ok();
     if !valida || !req.usuario.trim().eq_ignore_ascii_case(&usuario_guardado) {
         return Err(unauthorized("Usuario o contraseña incorrectos."));
     }
-
     let token = Uuid::new_v4().to_string();
     state.sessions.write().await.insert(token.clone(), Instant::now() + SESSION_TTL);
-
     Ok(Json(LoginResponse {
         autenticado: true,
         usuario: usuario_guardado,
@@ -253,36 +232,24 @@ async fn cambiar_password(
     if req.password_nueva == req.password_actual {
         return Err(bad("La nueva contraseña debe ser distinta de la actual."));
     }
-
     let row = sqlx::query("SELECT usuario, password_hash FROM autenticacion_local WHERE id = 1 LIMIT 1")
-        .fetch_one(&state.pool)
-        .await
-        .map_err(internal)?;
+        .fetch_one(&state.pool).await.map_err(internal)?;
     let usuario_guardado: String = row.try_get("usuario").map_err(internal)?;
     let hash_guardado: String = row.try_get("password_hash").map_err(internal)?;
     if !req.usuario.trim().eq_ignore_ascii_case(&usuario_guardado) {
         return Err(unauthorized("El usuario no corresponde a la sesión configurada."));
     }
-
     let hash = PasswordHash::new(&hash_guardado).map_err(|_| internal("Hash de autenticación inválido"))?;
     if Argon2::default().verify_password(req.password_actual.as_bytes(), &hash).is_err() {
         return Err(unauthorized("La contraseña actual no es correcta."));
     }
-
     let salt = SaltString::generate(&mut OsRng);
     let nuevo_hash = Argon2::default()
         .hash_password(req.password_nueva.as_bytes(), &salt)
         .map_err(|_| internal("No fue posible proteger la nueva contraseña."))?
         .to_string();
-
-    sqlx::query(
-        "UPDATE autenticacion_local SET password_hash=?, password_actualizada_en=NOW(), actualizada_en=NOW() WHERE id=1",
-    )
-    .bind(nuevo_hash)
-    .execute(&state.pool)
-    .await
-    .map_err(internal)?;
-
+    sqlx::query("UPDATE autenticacion_local SET password_hash=?, password_actualizada_en=NOW(), actualizada_en=NOW() WHERE id=1")
+        .bind(nuevo_hash).execute(&state.pool).await.map_err(internal)?;
     Ok(Json(serde_json::json!({ "message": "Contraseña actualizada correctamente." })))
 }
 
@@ -292,28 +259,19 @@ async fn db_select(
     Json(req): Json<SqlRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
     autorizar(&state, &headers).await?;
-    if sql_compat::es_pragma(&req.query) {
-        return Ok(Json(Value::Array(vec![])));
-    }
+    if sql_compat::es_pragma(&req.query) { return Ok(Json(Value::Array(vec![]))); }
     if !sql_compat::es_lectura(&req.query) {
         return Err(bad("La ruta select solo admite consultas de lectura."));
     }
-
     let sql = sql_compat::normalizar_sql(&req.query);
     let mut query = sqlx::query(&sql);
-    for value in &req.params {
-        query = bind_json(query, value);
-    }
-
+    for value in &req.params { query = bind_json(query, value); }
     let rows = query.fetch_all(&state.pool).await.map_err(|e| {
         error!(sql=%sql, error=%e, "Error de consulta MariaDB");
         bad(format!("Error de consulta: {e}"))
     })?;
-
     let mut salida = Vec::with_capacity(rows.len());
-    for row in rows {
-        salida.push(row_to_json(&row).map_err(internal)?);
-    }
+    for row in rows { salida.push(row_to_json(&row).map_err(internal)?); }
     Ok(Json(Value::Array(salida)))
 }
 
@@ -326,21 +284,14 @@ async fn db_execute(
     if sql_compat::es_pragma(&req.query) {
         return Ok(Json(ExecuteResponse { rows_affected: 0, last_insert_id: None }));
     }
-    if sql_compat::es_lectura(&req.query) {
-        return Err(bad("La ruta execute no admite SELECT."));
-    }
-
+    if sql_compat::es_lectura(&req.query) { return Err(bad("La ruta execute no admite SELECT.")); }
     let sql = sql_compat::normalizar_sql(&req.query);
     let mut query = sqlx::query(&sql);
-    for value in &req.params {
-        query = bind_json(query, value);
-    }
-
+    for value in &req.params { query = bind_json(query, value); }
     let result = query.execute(&state.pool).await.map_err(|e| {
         error!(sql=%sql, error=%e, "Error de escritura MariaDB");
         bad(format!("Error de escritura: {e}"))
     })?;
-
     Ok(Json(ExecuteResponse {
         rows_affected: result.rows_affected(),
         last_insert_id: match result.last_insert_id() { 0 => None, id => Some(id) },
@@ -370,27 +321,19 @@ fn row_to_json(row: &MySqlRow) -> Result<Value, sqlx::Error> {
             object.insert(column.name().to_string(), Value::Null);
             continue;
         }
-
         let type_name = column.type_info().name().to_uppercase();
-        let value = if ["TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT", "YEAR"]
-            .iter().any(|t| type_name.contains(t))
-        {
+        let value = if ["TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT", "YEAR"].iter().any(|t| type_name.contains(t)) {
             match row.try_get::<i64, _>(i) {
                 Ok(v) => Value::from(v),
                 Err(_) => Value::String(row.try_get::<String, _>(i).unwrap_or_default()),
             }
-        } else if ["FLOAT", "DOUBLE", "DECIMAL", "NUMERIC"]
-            .iter().any(|t| type_name.contains(t))
-        {
+        } else if ["FLOAT", "DOUBLE", "DECIMAL", "NUMERIC"].iter().any(|t| type_name.contains(t)) {
             match row.try_get::<f64, _>(i) {
                 Ok(v) => serde_json::Number::from_f64(v).map(Value::Number).unwrap_or(Value::Null),
                 Err(_) => Value::String(row.try_get::<String, _>(i).unwrap_or_default()),
             }
-        } else if ["BLOB", "BINARY", "VARBINARY"]
-            .iter().any(|t| type_name.contains(t))
-        {
-            let bytes = row.try_get::<Vec<u8>, _>(i).unwrap_or_default();
-            Value::String(hex::encode(bytes))
+        } else if ["BLOB", "BINARY", "VARBINARY"].iter().any(|t| type_name.contains(t)) {
+            Value::String(hex::encode(row.try_get::<Vec<u8>, _>(i).unwrap_or_default()))
         } else {
             Value::String(row.try_get::<String, _>(i).unwrap_or_default())
         };
@@ -400,12 +343,10 @@ fn row_to_json(row: &MySqlRow) -> Result<Value, sqlx::Error> {
 }
 
 async fn autorizar(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusCode, Json<ApiError>)> {
-    let token = headers
-        .get(header::AUTHORIZATION)
+    let token = headers.get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .ok_or_else(|| unauthorized("Sesión requerida."))?;
-
     let mut sessions = state.sessions.write().await;
     sessions.retain(|_, expires| *expires > Instant::now());
     let Some(expires) = sessions.get_mut(token) else {
@@ -416,58 +357,38 @@ async fn autorizar(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusC
 }
 
 async fn backup_status(
-    State(state): State<AppState>,
-    headers: HeaderMap,
+    State(state): State<AppState>, headers: HeaderMap,
 ) -> Result<Json<Vec<DatabaseStatus>>, (StatusCode, Json<ApiError>)> {
     autorizar(&state, &headers).await?;
     let nombre: String = sqlx::query_scalar("SELECT DATABASE()")
-        .fetch_one(&state.pool)
-        .await
-        .map_err(internal)?;
+        .fetch_one(&state.pool).await.map_err(internal)?;
     let size: Option<i64> = sqlx::query_scalar(
         "SELECT SUM(data_length + index_length) FROM information_schema.tables WHERE table_schema = DATABASE()",
-    )
-    .fetch_one(&state.pool)
-    .await
-    .map_err(internal)?;
+    ).fetch_one(&state.pool).await.map_err(internal)?;
     Ok(Json(vec![DatabaseStatus {
-        name: nombre.clone(),
-        path: format!("MariaDB: {nombre}"),
-        exists: true,
-        size_bytes: size.unwrap_or(0).max(0) as u64,
-        modified_unix: None,
+        name: nombre.clone(), path: format!("MariaDB: {nombre}"), exists: true,
+        size_bytes: size.unwrap_or(0).max(0) as u64, modified_unix: None,
     }]))
 }
 
 async fn backup_download(
-    State(state): State<AppState>,
-    headers: HeaderMap,
+    State(state): State<AppState>, headers: HeaderMap,
 ) -> Result<Response, (StatusCode, Json<ApiError>)> {
     autorizar(&state, &headers).await?;
     let cfg = DbCliConfig::from_url(&state.database_url).map_err(bad)?;
-    let output = Command::new("mariadb-dump")
-        .args(cfg.dump_args())
-        .output()
-        .await
+    let output = Command::new("mariadb-dump").args(cfg.dump_args()).output().await
         .map_err(|e| internal(format!("No fue posible ejecutar mariadb-dump: {e}")))?;
-    if !output.status.success() {
-        return Err(internal(String::from_utf8_lossy(&output.stderr).to_string()));
-    }
-
+    if !output.status.success() { return Err(internal(String::from_utf8_lossy(&output.stderr).to_string())); }
     let filename = format!("HVDigital_MariaDB_{}.sql", chrono::Local::now().format("%Y%m%d-%H%M"));
     let mut response = Response::new(Body::from(output.stdout));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/sql"));
-    response.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")).unwrap(),
-    );
+    response.headers_mut().insert(header::CONTENT_DISPOSITION,
+        HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")).unwrap());
     Ok(response)
 }
 
 async fn backup_restore(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    mut multipart: Multipart,
+    State(state): State<AppState>, headers: HeaderMap, mut multipart: Multipart,
 ) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
     autorizar(&state, &headers).await?;
     let mut sql_bytes: Option<Vec<u8>> = None;
@@ -478,25 +399,17 @@ async fn backup_restore(
         }
     }
     let sql_bytes = sql_bytes.ok_or_else(|| bad("Debe adjuntar un respaldo SQL de HVDigital."))?;
-    if sql_bytes.len() > 512 * 1024 * 1024 {
-        return Err(bad("El respaldo supera el máximo permitido de 512 MB."));
-    }
-
+    if sql_bytes.len() > 512 * 1024 * 1024 { return Err(bad("El respaldo supera el máximo permitido de 512 MB.")); }
     let cfg = DbCliConfig::from_url(&state.database_url).map_err(bad)?;
-    let mut child = Command::new("mariadb")
-        .args(cfg.client_args())
-        .stdin(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+    let mut child = Command::new("mariadb").args(cfg.client_args())
+        .stdin(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn()
         .map_err(|e| internal(format!("No fue posible ejecutar mariadb: {e}")))?;
     if let Some(mut stdin) = child.stdin.take() {
         use tokio::io::AsyncWriteExt;
         stdin.write_all(&sql_bytes).await.map_err(internal)?;
     }
     let output = child.wait_with_output().await.map_err(internal)?;
-    if !output.status.success() {
-        return Err(internal(String::from_utf8_lossy(&output.stderr).to_string()));
-    }
+    if !output.status.success() { return Err(internal(String::from_utf8_lossy(&output.stderr).to_string())); }
     Ok(Json(serde_json::json!({
         "sourcePath": "archivo subido desde navegador",
         "safetyBackupPath": "administrado por MariaDB",
@@ -505,64 +418,35 @@ async fn backup_restore(
     })))
 }
 
-struct DbCliConfig {
-    host: String,
-    port: u16,
-    user: String,
-    password: String,
-    database: String,
-}
-
+struct DbCliConfig { host: String, port: u16, user: String, password: String, database: String }
 impl DbCliConfig {
     fn from_url(value: &str) -> Result<Self, String> {
         let url = Url::parse(value).map_err(|e| format!("DATABASE_URL inválida: {e}"))?;
         Ok(Self {
             host: url.host_str().unwrap_or("127.0.0.1").to_string(),
-            port: url.port().unwrap_or(3306),
-            user: url.username().to_string(),
-            password: url.password().unwrap_or("").to_string(),
-            database: url.path().trim_start_matches('/').to_string(),
+            port: url.port().unwrap_or(3306), user: url.username().to_string(),
+            password: url.password().unwrap_or("").to_string(), database: url.path().trim_start_matches('/').to_string(),
         })
     }
-
     fn common_args(&self) -> Vec<String> {
-        vec![
-            format!("--host={}", self.host),
-            format!("--port={}", self.port),
-            format!("--user={}", self.user),
-            format!("--password={}", self.password),
-            "--default-character-set=utf8mb4".to_string(),
-        ]
+        vec![format!("--host={}", self.host), format!("--port={}", self.port),
+             format!("--user={}", self.user), format!("--password={}", self.password),
+             "--default-character-set=utf8mb4".to_string()]
     }
-
     fn dump_args(&self) -> Vec<String> {
         let mut args = self.common_args();
-        args.extend([
-            "--single-transaction".to_string(),
-            "--routines".to_string(),
-            "--triggers".to_string(),
-            "--events".to_string(),
-            "--hex-blob".to_string(),
-            self.database.clone(),
-        ]);
-        args
+        args.extend(["--single-transaction".into(), "--routines".into(), "--triggers".into(),
+                     "--events".into(), "--hex-blob".into(), self.database.clone()]); args
     }
-
-    fn client_args(&self) -> Vec<String> {
-        let mut args = self.common_args();
-        args.push(self.database.clone());
-        args
-    }
+    fn client_args(&self) -> Vec<String> { let mut args = self.common_args(); args.push(self.database.clone()); args }
 }
 
 fn bad<T: Into<String>>(message: T) -> (StatusCode, Json<ApiError>) {
     (StatusCode::BAD_REQUEST, Json(ApiError { error: message.into() }))
 }
-
 fn unauthorized<T: Into<String>>(message: T) -> (StatusCode, Json<ApiError>) {
     (StatusCode::UNAUTHORIZED, Json(ApiError { error: message.into() }))
 }
-
 fn internal<E: std::fmt::Display>(error: E) -> (StatusCode, Json<ApiError>) {
     error!(%error, "Error interno HVDigital Web");
     (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: error.to_string() }))
