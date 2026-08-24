@@ -1,5 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
-import { confirm, open, save } from '@tauri-apps/plugin-dialog'
+import { apiFetch, apiJson } from '../web/api'
 
 export interface DatabaseStatus {
   name: string
@@ -23,85 +22,75 @@ export interface RestoreResult {
   restoredUnix: number
 }
 
-function backupFileName(): string {
-  const now = new Date()
-  const parts = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-    '-',
-    String(now.getHours()).padStart(2, '0'),
-    String(now.getMinutes()).padStart(2, '0'),
-  ]
-
-  return `HVDigital_Backup_${parts.join('')}.hvbk`
+function elegirArchivo(): Promise<File | null> {
+  return new Promise(resolve => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.hvbk,application/octet-stream'
+    input.style.display = 'none'
+    input.addEventListener('change', () => {
+      resolve(input.files?.[0] ?? null)
+      input.remove()
+    }, { once: true })
+    document.body.appendChild(input)
+    input.click()
+  })
 }
 
 export async function obtenerEstadoBasesDatos(): Promise<DatabaseStatus[]> {
-  return invoke<DatabaseStatus[]>('get_database_status')
+  return apiJson<DatabaseStatus[]>('/backup/status')
 }
 
 export async function seleccionarYCrearRespaldo(): Promise<BackupResult | null> {
-  const destination = await save({
-    title: 'Guardar respaldo de HVDigital',
-    defaultPath: backupFileName(),
-    filters: [{ name: 'Respaldo HVDigital', extensions: ['hvbk'] }],
-  })
+  const response = await apiFetch('/backup/download')
+  if (!response.ok) throw new Error(await response.text())
 
-  if (!destination) return null
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+  const filename = match?.[1] || `HVDigital_Backup_${Date.now()}.hvbk`
 
-  const path = destination.toLowerCase().endsWith('.hvbk')
-    ? destination
-    : `${destination}.hvbk`
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 
-  return invoke<BackupResult>('create_database_backup', {
-    destinationPath: path,
-  })
+  return {
+    path: filename,
+    createdUnix: Math.floor(Date.now() / 1000),
+    databases: ['hvdigital.db'],
+    sizeBytes: blob.size,
+  }
 }
 
 export async function seleccionarYRestaurarRespaldo(): Promise<RestoreResult | null> {
-  const source = await open({
-    title: 'Seleccionar respaldo de HVDigital',
-    multiple: false,
-    directory: false,
-    filters: [{ name: 'Respaldo HVDigital', extensions: ['hvbk'] }],
-  })
+  const file = await elegirArchivo()
+  if (!file) return null
 
-  if (!source || Array.isArray(source)) return null
-
-  const accepted = await confirm(
-    'La restauración reemplazará los datos locales actuales. HVDigital creará automáticamente un respaldo preventivo antes de continuar. ¿Desea restaurar el archivo seleccionado?',
-    {
-      title: 'Confirmar restauración',
-      kind: 'warning',
-      okLabel: 'Restaurar',
-      cancelLabel: 'Cancelar',
-    },
+  const accepted = window.confirm(
+    'La restauración reemplazará la base central actual. Se creará un respaldo preventivo en el servidor antes de continuar. ¿Desea restaurar el archivo seleccionado?',
   )
-
   if (!accepted) return null
 
-  return invoke<RestoreResult>('restore_database_backup', {
-    sourcePath: source,
-  })
+  const form = new FormData()
+  form.append('file', file, file.name)
+  return apiJson<RestoreResult>('/backup/restore', { method: 'POST', body: form })
 }
 
 export function formatearBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-
   const units = ['B', 'KB', 'MB', 'GB']
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  )
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
   const value = bytes / (1024 ** index)
-
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
 export function formatearFechaUnix(value: number | null | undefined): string {
   if (!value) return 'Sin información'
-
   return new Intl.DateTimeFormat('es-CL', {
     dateStyle: 'medium',
     timeStyle: 'short',
