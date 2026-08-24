@@ -18,14 +18,22 @@ DB_HOST="${HVDIGITAL_DB_HOST:-127.0.0.1}"
 DB_PORT="${HVDIGITAL_DB_PORT:-3306}"
 DB_PASSWORD="${HVDIGITAL_DB_PASSWORD:-$(openssl rand -hex 24 2>/dev/null || tr -dc A-Za-z0-9 </dev/urandom | head -c 48)}"
 LEGACY_DB="${HVDIGITAL_LEGACY_DB:-}"
+LOCAL_DB=0
+
+if [[ "$DB_HOST" == "127.0.0.1" || "$DB_HOST" == "localhost" ]]; then
+  LOCAL_DB=1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
   ca-certificates curl git nginx build-essential pkg-config libssl-dev \
-  mariadb-server mariadb-client python3 python3-pymysql openssl
+  mariadb-client python3 python3-pymysql openssl
 
-systemctl enable --now mariadb
+if [[ "$LOCAL_DB" -eq 1 ]]; then
+  apt-get install -y mariadb-server
+  systemctl enable --now mariadb
+fi
 
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'Number(process.versions.node.split(`.`)[0])' 2>/dev/null || echo 0)" -lt 20 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
@@ -45,7 +53,7 @@ mkdir -p "$DATA_DIR/backups" "$CONF_DIR"
 chown -R hvdigital:hvdigital "$DATA_DIR"
 chmod 750 "$DATA_DIR"
 
-if [[ "$DB_HOST" == "127.0.0.1" || "$DB_HOST" == "localhost" ]]; then
+if [[ "$LOCAL_DB" -eq 1 ]]; then
   mariadb --protocol=socket -uroot <<SQL
 CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
