@@ -26,7 +26,7 @@ function elegirArchivo(): Promise<File | null> {
   return new Promise(resolve => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.hvbk,application/octet-stream'
+    input.accept = '.sql,.sql.gz,application/sql,text/plain,application/octet-stream'
     input.style.display = 'none'
     input.addEventListener('change', () => {
       resolve(input.files?.[0] ?? null)
@@ -48,7 +48,7 @@ export async function seleccionarYCrearRespaldo(): Promise<BackupResult | null> 
   const blob = await response.blob()
   const disposition = response.headers.get('content-disposition') || ''
   const match = disposition.match(/filename="?([^";]+)"?/i)
-  const filename = match?.[1] || `HVDigital_Backup_${Date.now()}.hvbk`
+  const filename = match?.[1] || `HVDigital_MariaDB_${Date.now()}.sql`
 
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -62,7 +62,7 @@ export async function seleccionarYCrearRespaldo(): Promise<BackupResult | null> 
   return {
     path: filename,
     createdUnix: Math.floor(Date.now() / 1000),
-    databases: ['hvdigital.db'],
+    databases: ['MariaDB · hvdigital'],
     sizeBytes: blob.size,
   }
 }
@@ -72,7 +72,7 @@ export async function seleccionarYRestaurarRespaldo(): Promise<RestoreResult | n
   if (!file) return null
 
   const accepted = window.confirm(
-    'La restauración reemplazará la base central actual. Se creará un respaldo preventivo en el servidor antes de continuar. ¿Desea restaurar el archivo seleccionado?',
+    'La restauración reemplazará la base MariaDB central actual. HVDigital generará primero un respaldo preventivo en el servidor. ¿Desea continuar?',
   )
   if (!accepted) return null
 
@@ -90,7 +90,7 @@ export function formatearBytes(bytes: number): string {
 }
 
 export function formatearFechaUnix(value: number | null | undefined): string {
-  if (!value) return 'Sin información'
+  if (!value) return 'Administrado por MariaDB'
   return new Intl.DateTimeFormat('es-CL', {
     dateStyle: 'medium',
     timeStyle: 'short',
