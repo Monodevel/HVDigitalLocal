@@ -21,7 +21,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
   }
 
   if (command === 'cambiar_password_local') {
-    return apiJson<T>('/auth/password', {
+    const response = await apiJson<{ message: string }>('/auth/password', {
       method: 'POST',
       body: JSON.stringify({
         usuario: args.usuario,
@@ -29,6 +29,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
         passwordNueva: args.passwordNueva,
       }),
     })
+    return response.message as T
   }
 
   if (command === 'get_database_status') {
