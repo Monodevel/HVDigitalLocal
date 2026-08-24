@@ -16,17 +16,13 @@ function validarSerie(valor: string): asserts valor is SerieResolucion {
   }
 }
 
+/**
+ * En la edición web el esquema de series se administra desde las migraciones
+ * MariaDB del backend. Esta función solo garantiza los registros base y no
+ * intenta crear tablas, índices ni triggers desde el navegador.
+ */
 export async function asegurarSeriesResoluciones(): Promise<void> {
   const db = await obtenerBaseDatos()
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS configuracion_series_resolucion (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      prefijo TEXT NOT NULL DEFAULT '1530'
-        CHECK (prefijo IN ('1530', '6060')),
-      actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
 
   await db.execute(`
     INSERT INTO configuracion_series_resolucion (id, prefijo)
@@ -36,66 +32,14 @@ export async function asegurarSeriesResoluciones(): Promise<void> {
 
   await db.execute(`
     INSERT INTO contadores_resolucion (prefijo, ultimo_correlativo)
-    VALUES ('6060', 0)
+    VALUES ('1530', 0)
     ON CONFLICT(prefijo) DO NOTHING
   `)
 
-  /*
-   * La aplicación es local y de un único usuario. La numeración efectiva
-   * se corrige dentro de SQLite al pasar un borrador a EMITIDA. Se elimina
-   * el índice histórico para evitar una colisión transitoria provocada por
-   * el servicio antiguo, que calculaba inicialmente con la serie 1530.
-   */
   await db.execute(`
-    DROP INDEX IF EXISTS ux_resoluciones_documentales_correlativo
-  `)
-
-  await db.execute(`
-    CREATE INDEX IF NOT EXISTS ix_resoluciones_documentales_serie_correlativo
-    ON resoluciones_documentales(prefijo, correlativo)
-    WHERE correlativo IS NOT NULL
-  `)
-
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS trg_resolucion_aplicar_serie_borrador
-    AFTER INSERT ON resoluciones_documentales
-    WHEN NEW.estado = 'BORRADOR'
-    BEGIN
-      UPDATE resoluciones_documentales
-      SET prefijo = COALESCE(
-        (SELECT prefijo FROM configuracion_series_resolucion WHERE id = 1),
-        '1530'
-      )
-      WHERE id = NEW.id;
-    END
-  `)
-
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS trg_resolucion_corregir_correlativo_serie
-    AFTER UPDATE OF estado ON resoluciones_documentales
-    WHEN OLD.estado = 'BORRADOR' AND NEW.estado = 'EMITIDA'
-    BEGIN
-      UPDATE resoluciones_documentales
-      SET
-        correlativo = (
-          SELECT COALESCE(MAX(r2.correlativo), 0) + 1
-          FROM resoluciones_documentales r2
-          WHERE r2.prefijo = NEW.prefijo
-            AND r2.estado = 'EMITIDA'
-            AND r2.id <> NEW.id
-            AND r2.correlativo IS NOT NULL
-        ),
-        numero_visible = NEW.prefijo || '/' || (
-          SELECT COALESCE(MAX(r3.correlativo), 0) + 1
-          FROM resoluciones_documentales r3
-          WHERE r3.prefijo = NEW.prefijo
-            AND r3.estado = 'EMITIDA'
-            AND r3.id <> NEW.id
-            AND r3.correlativo IS NOT NULL
-        ),
-        actualizada_en = CURRENT_TIMESTAMP
-      WHERE id = NEW.id;
-    END
+    INSERT INTO contadores_resolucion (prefijo, ultimo_correlativo)
+    VALUES ('6060', 0)
+    ON CONFLICT(prefijo) DO NOTHING
   `)
 }
 
