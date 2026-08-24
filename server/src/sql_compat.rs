@@ -61,16 +61,60 @@ fn reemplazar_excluded(input: &str) -> String {
     salida
 }
 
+/// Omite espacios y comentarios SQL iniciales y devuelve la primera palabra.
+/// Esto permite reconocer correctamente consultas formateadas como `SELECT\n...`
+/// o precedidas por comentarios, sin depender de un espacio literal después de
+/// la palabra clave.
+fn primera_palabra_sql(sql: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut i = 0usize;
+
+    loop {
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+
+        // Comentario de línea: -- ...\n
+        if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+
+        // Comentario de bloque: /* ... */
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            if i + 1 < bytes.len() {
+                i += 2;
+            }
+            continue;
+        }
+
+        break;
+    }
+
+    let inicio = i;
+    while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1;
+    }
+
+    sql[inicio..i].to_ascii_uppercase()
+}
+
 pub fn es_pragma(sql: &str) -> bool {
-    sql.trim_start().to_uppercase().starts_with("PRAGMA ")
+    primera_palabra_sql(sql) == "PRAGMA"
 }
 
 pub fn es_lectura(sql: &str) -> bool {
-    let upper = sql.trim_start().to_uppercase();
-    upper.starts_with("SELECT ")
-        || upper.starts_with("WITH ")
-        || upper.starts_with("SHOW ")
-        || upper.starts_with("DESCRIBE ")
+    matches!(
+        primera_palabra_sql(sql).as_str(),
+        "SELECT" | "WITH" | "SHOW" | "DESCRIBE" | "DESC" | "EXPLAIN"
+    )
 }
 
 pub fn valor_para_log(valor: &Value) -> String {
