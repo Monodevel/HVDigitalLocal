@@ -20,13 +20,56 @@ jobs:
       - run: npm install
       - run: npm run build
 
-  backend:
+  backend-mariadb:
     runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: hvdigital
+          MARIADB_USER: hvdigital
+          MARIADB_PASSWORD: hvdigital
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://hvdigital:hvdigital@127.0.0.1:3306/hvdigital
+      HVDIGITAL_DB_HOST: 127.0.0.1
+      HVDIGITAL_DB_PORT: 3306
+      HVDIGITAL_DB_USER: hvdigital
+      HVDIGITAL_DB_PASSWORD: hvdigital
+      HVDIGITAL_DB_NAME: hvdigital
+      HVDIGITAL_BIND: 127.0.0.1:8080
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: server
-      - run: cargo check --manifest-path server/Cargo.toml
-      - run: cargo build --release --manifest-path server/Cargo.toml
+      - name: Install bootstrap dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pymysql mariadb-client
+      - name: Bootstrap MariaDB schema
+        run: python3 deploy/bootstrap_mariadb.py --drop-existing
+      - name: Check backend
+        run: cargo check --manifest-path server/Cargo.toml
+      - name: Build backend
+        run: cargo build --release --manifest-path server/Cargo.toml
+      - name: Start API and verify MariaDB
+        run: |
+          ./server/target/release/hvdigital-web-server > /tmp/hvdigital.log 2>&1 &
+          echo $! > /tmp/hvdigital.pid
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:8080/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/hvdigital.log
+          exit 1
