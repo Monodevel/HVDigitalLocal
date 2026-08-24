@@ -1,0 +1,37 @@
+CREATE TABLE IF NOT EXISTS schema_migrations_web (
+  version INT PRIMARY KEY,
+  description VARCHAR(191) NOT NULL,
+  applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS autenticacion_local (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  usuario VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  password_actualizada_en DATETIME NULL,
+  creada_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizada_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT ck_auth_singleton CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS configuracion (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  unidad_nombre VARCHAR(255) NOT NULL DEFAULT '',
+  unidad_sigla VARCHAR(80) NOT NULL DEFAULT '',
+  responsable VARCHAR(255) NOT NULL DEFAULT '',
+  periodo_activo_id BIGINT UNSIGNED NULL,
+  configurado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ck_config_singleton CHECK (id = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS periodos (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(150) NOT NULL,
+  anio INT NOT NULL,
+  fecha_inicio DATE NOT NULL,
+  fecha_termino DATE NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'abierto',
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY ux_periodos_anio (anio),
+  CONSTRAINT ck_periodos_estado CHECK (estado IN ('abierto','cerrado','ABIERTO','CERRADO'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
