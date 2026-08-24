@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde_json::Value;
 
 pub fn normalizar_sql(sql: &str) -> String {
@@ -13,52 +14,58 @@ pub fn normalizar_sql(sql: &str) -> String {
     out = out.replace("insert or ignore", "INSERT IGNORE");
     out = out.replace("AUTOINCREMENT", "AUTO_INCREMENT");
     out = out.replace("autoincrement", "AUTO_INCREMENT");
-    out = out.replace("CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP");
     out = out.replace("COLLATE NOCASE", "COLLATE utf8mb4_unicode_ci");
     out = out.replace("collate nocase", "COLLATE utf8mb4_unicode_ci");
 
-    // SQLite usa || como concatenación; MariaDB usa CONCAT(). Los casos
-    // complejos se migrarán progresivamente a endpoints de dominio. Para
-    // consultas simples mantenemos PIPES_AS_CONCAT a nivel de sesión.
+    // SQLite usa || como concatenación; MariaDB se ejecuta con
+    // PIPES_AS_CONCAT configurado a nivel de sesión.
 
-    // ON CONFLICT(col) DO UPDATE SET a = excluded.a -> ON DUPLICATE KEY UPDATE a = VALUES(a)
-    if let Some(pos) = out.to_uppercase().find(" ON CONFLICT") {
-        if let Some(update_pos_rel) = out[pos..].to_uppercase().find(" DO UPDATE SET ") {
-            let update_pos = pos + update_pos_rel;
-            let asignaciones = out[(update_pos + " DO UPDATE SET ".len())..].to_string();
-            let asignaciones = reemplazar_excluded(&asignaciones);
-            out = format!("{} ON DUPLICATE KEY UPDATE {}", &out[..pos], asignaciones);
-        }
-    }
-
-    // SQLite ON CONFLICT DO NOTHING.
-    let upper = out.to_uppercase();
-    if let Some(pos) = upper.find(" ON CONFLICT") {
-        if upper[pos..].contains("DO NOTHING") {
-            let mut prefijo = out[..pos].to_string();
-            prefijo = prefijo.replacen("INSERT INTO", "INSERT IGNORE INTO", 1);
-            out = prefijo;
-        }
-    }
+    out = convertir_on_conflict_do_update(&out);
+    out = convertir_on_conflict_do_nothing(&out);
 
     out
 }
 
-fn reemplazar_excluded(input: &str) -> String {
-    let mut salida = input.to_string();
-    loop {
-        let lower = salida.to_lowercase();
-        let Some(pos) = lower.find("excluded.") else { break };
-        let inicio = pos + "excluded.".len();
-        let resto = &salida[inicio..];
-        let fin_rel = resto
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-            .unwrap_or(resto.len());
-        let columna = &resto[..fin_rel];
-        let reemplazo = format!("VALUES({columna})");
-        salida.replace_range(pos..inicio + fin_rel, &reemplazo);
+fn convertir_on_conflict_do_update(sql: &str) -> String {
+    // Admite formato en una o múltiples líneas, por ejemplo:
+    // ON CONFLICT(periodo_id, codigo_regimen)
+    // DO UPDATE SET
+    //   campo = excluded.campo
+    let re = Regex::new(
+        r"(?is)\s+ON\s+CONFLICT\s*(?:\([^)]*\))?\s*DO\s+UPDATE\s+SET\s+",
+    )
+    .expect("regex ON CONFLICT DO UPDATE válida");
+
+    let Some(m) = re.find(sql) else {
+        return sql.to_string();
+    };
+
+    let prefijo = &sql[..m.start()];
+    let asignaciones = reemplazar_excluded(&sql[m.end()..]);
+    format!("{prefijo} ON DUPLICATE KEY UPDATE {asignaciones}")
+}
+
+fn convertir_on_conflict_do_nothing(sql: &str) -> String {
+    let re = Regex::new(
+        r"(?is)\s+ON\s+CONFLICT\s*(?:\([^)]*\))?\s*DO\s+NOTHING\s*;?\s*$",
+    )
+    .expect("regex ON CONFLICT DO NOTHING válida");
+
+    if !re.is_match(sql) {
+        return sql.to_string();
     }
-    salida
+
+    let sin_conflicto = re.replace(sql, "").to_string();
+    let re_insert = Regex::new(r"(?i)^\s*INSERT\s+INTO\b").expect("regex INSERT válida");
+    re_insert
+        .replace(&sin_conflicto, "INSERT IGNORE INTO")
+        .to_string()
+}
+
+fn reemplazar_excluded(input: &str) -> String {
+    let re = Regex::new(r"(?i)\bexcluded\.([A-Za-z_][A-Za-z0-9_]*)")
+        .expect("regex excluded válida");
+    re.replace_all(input, "VALUES($1)").to_string()
 }
 
 /// Omite espacios y comentarios SQL iniciales y devuelve la primera palabra.
@@ -125,5 +132,31 @@ pub fn valor_para_log(valor: &Value) -> String {
         Value::String(v) => format!("string(len={})", v.len()),
         Value::Array(v) => format!("array(len={})", v.len()),
         Value::Object(v) => format!("object(len={})", v.len()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalizar_sql;
+
+    #[test]
+    fn convierte_on_conflict_multilinea() {
+        let sql = r#"
+            INSERT INTO vigencias_periodo (
+              periodo_id, codigo_regimen, nombre_regimen
+            ) VALUES ($1, $2, $3)
+            ON CONFLICT(
+              periodo_id,
+              codigo_regimen
+            )
+            DO UPDATE SET
+              nombre_regimen = excluded.nombre_regimen,
+              activo = 1
+        "#;
+
+        let convertido = normalizar_sql(sql);
+        assert!(convertido.contains("ON DUPLICATE KEY UPDATE"));
+        assert!(convertido.contains("nombre_regimen = VALUES(nombre_regimen)"));
+        assert!(!convertido.to_uppercase().contains("ON CONFLICT"));
     }
 }
