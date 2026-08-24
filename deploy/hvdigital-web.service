@@ -1,0 +1,24 @@
+[Unit]
+Description=HVDigital Web API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hvdigital
+Group=hvdigital
+WorkingDirectory=/opt/hvdigital
+Environment=HVDIGITAL_DATA_DIR=/var/lib/hvdigital
+Environment=HVDIGITAL_BIND=127.0.0.1:8080
+Environment=RUST_LOG=hvdigital_web_server=info,tower_http=info
+ExecStart=/opt/hvdigital/bin/hvdigital-web-server
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hvdigital
+
+[Install]
+WantedBy=multi-user.target
