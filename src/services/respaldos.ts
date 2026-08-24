@@ -26,7 +26,7 @@ function elegirArchivo(): Promise<File | null> {
   return new Promise(resolve => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.sql,.sql.gz,application/sql,text/plain,application/octet-stream'
+    input.accept = '.sql,application/sql,text/plain,application/octet-stream'
     input.style.display = 'none'
     input.addEventListener('change', () => {
       resolve(input.files?.[0] ?? null)
@@ -38,7 +38,24 @@ function elegirArchivo(): Promise<File | null> {
 }
 
 export async function obtenerEstadoBasesDatos(): Promise<DatabaseStatus[]> {
-  return apiJson<DatabaseStatus[]>('/backup/status')
+  const bases = await apiJson<DatabaseStatus[]>('/backup/status')
+  const maria = bases[0]
+  if (!maria) return []
+
+  // Configuración mantiene dos dominios lógicos aunque físicamente ambos
+  // residan en el mismo esquema MariaDB central.
+  return [
+    {
+      ...maria,
+      name: 'hvdigital.db',
+      path: `${maria.path} · datos operacionales`,
+    },
+    {
+      ...maria,
+      name: 'catalog.db',
+      path: `${maria.path} · catálogos institucionales`,
+    },
+  ]
 }
 
 export async function seleccionarYCrearRespaldo(): Promise<BackupResult | null> {
@@ -62,7 +79,7 @@ export async function seleccionarYCrearRespaldo(): Promise<BackupResult | null> 
   return {
     path: filename,
     createdUnix: Math.floor(Date.now() / 1000),
-    databases: ['MariaDB · hvdigital'],
+    databases: ['MariaDB · datos operacionales y catálogos'],
     sizeBytes: blob.size,
   }
 }
@@ -72,7 +89,7 @@ export async function seleccionarYRestaurarRespaldo(): Promise<RestoreResult | n
   if (!file) return null
 
   const accepted = window.confirm(
-    'La restauración reemplazará la base MariaDB central actual. HVDigital generará primero un respaldo preventivo en el servidor. ¿Desea continuar?',
+    'La restauración reemplazará la base MariaDB central actual. Realice o descargue un respaldo antes de continuar. ¿Desea restaurar el archivo seleccionado?',
   )
   if (!accepted) return null
 
