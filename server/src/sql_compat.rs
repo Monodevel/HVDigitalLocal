@@ -27,10 +27,6 @@ pub fn normalizar_sql(sql: &str) -> String {
 }
 
 fn convertir_on_conflict_do_update(sql: &str) -> String {
-    // Admite formato en una o múltiples líneas, por ejemplo:
-    // ON CONFLICT(periodo_id, codigo_regimen)
-    // DO UPDATE SET
-    //   campo = excluded.campo
     let re = Regex::new(
         r"(?is)\s+ON\s+CONFLICT\s*(?:\([^)]*\))?\s*DO\s+UPDATE\s+SET\s+",
     )
@@ -68,10 +64,6 @@ fn reemplazar_excluded(input: &str) -> String {
     re.replace_all(input, "VALUES($1)").to_string()
 }
 
-/// Omite espacios y comentarios SQL iniciales y devuelve la primera palabra.
-/// Esto permite reconocer correctamente consultas formateadas como `SELECT\n...`
-/// o precedidas por comentarios, sin depender de un espacio literal después de
-/// la palabra clave.
 fn primera_palabra_sql(sql: &str) -> String {
     let bytes = sql.as_bytes();
     let mut i = 0usize;
@@ -81,7 +73,6 @@ fn primera_palabra_sql(sql: &str) -> String {
             i += 1;
         }
 
-        // Comentario de línea: -- ...\n
         if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
             i += 2;
             while i < bytes.len() && bytes[i] != b'\n' {
@@ -90,7 +81,6 @@ fn primera_palabra_sql(sql: &str) -> String {
             continue;
         }
 
-        // Comentario de bloque: /* ... */
         if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
             i += 2;
             while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
@@ -124,6 +114,19 @@ pub fn es_lectura(sql: &str) -> bool {
     )
 }
 
+/// El módulo histórico de Notas crea tabla, índices y triggers desde Vue con
+/// sintaxis SQLite. En la edición web esos objetos son responsabilidad de las
+/// migraciones nativas de MariaDB, por lo que estas sentencias se consideran
+/// ya satisfechas y no deben ejecutarse contra el servidor remoto.
+pub fn es_ddl_notas_legacy(sql: &str) -> bool {
+    let upper = sql.to_uppercase();
+    let es_create = primera_palabra_sql(sql) == "CREATE";
+    es_create
+        && (upper.contains("NOTAS_TAREAS_CALIFICADOR")
+            || upper.contains("IX_NOTAS_TAREAS_")
+            || upper.contains("TRG_NOTAS_TAREAS_"))
+}
+
 pub fn valor_para_log(valor: &Value) -> String {
     match valor {
         Value::Null => "NULL".into(),
@@ -137,7 +140,7 @@ pub fn valor_para_log(valor: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalizar_sql;
+    use super::{es_ddl_notas_legacy, normalizar_sql};
 
     #[test]
     fn convierte_on_conflict_multilinea() {
@@ -158,5 +161,12 @@ mod tests {
         assert!(convertido.contains("ON DUPLICATE KEY UPDATE"));
         assert!(convertido.contains("nombre_regimen = VALUES(nombre_regimen)"));
         assert!(!convertido.to_uppercase().contains("ON CONFLICT"));
+    }
+
+    #[test]
+    fn detecta_ddl_legacy_notas() {
+        assert!(es_ddl_notas_legacy("CREATE TABLE IF NOT EXISTS notas_tareas_calificador (id INTEGER)"));
+        assert!(es_ddl_notas_legacy("CREATE INDEX IF NOT EXISTS ix_notas_tareas_periodo ON notas_tareas_calificador(periodo_id)"));
+        assert!(es_ddl_notas_legacy("CREATE TRIGGER IF NOT EXISTS trg_notas_tareas_periodo_cerrado_insert BEFORE INSERT ON notas_tareas_calificador BEGIN SELECT 1; END"));
     }
 }
