@@ -1,6 +1,6 @@
 [Unit]
 Description=HVDigital Web API (MariaDB)
-After=network-online.target mariadb.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
