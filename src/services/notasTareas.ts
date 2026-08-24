@@ -53,74 +53,17 @@ function validarTexto(valor: string, etiqueta: string): string {
   return limpio
 }
 
+/**
+ * En la edición web el esquema se gestiona exclusivamente mediante las
+ * migraciones nativas del backend Rust/MariaDB. El frontend solo verifica que
+ * la tabla exista; no ejecuta DDL SQLite contra la base remota.
+ */
 export async function asegurarEsquemaNotasTareas(): Promise<void> {
   const db = await obtenerBaseDatos()
-
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS notas_tareas_calificador (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      periodo_id INTEGER NOT NULL,
-      persona_id INTEGER,
-      tipo TEXT NOT NULL CHECK (tipo IN ('NOTA', 'TAREA')),
-      titulo TEXT NOT NULL,
-      detalle TEXT,
-      prioridad TEXT NOT NULL DEFAULT 'MEDIA'
-        CHECK (prioridad IN ('BAJA', 'MEDIA', 'ALTA')),
-      estado TEXT NOT NULL DEFAULT 'PENDIENTE'
-        CHECK (estado IN ('PENDIENTE', 'EN_PROGRESO', 'COMPLETADA', 'ARCHIVADA')),
-      fecha_limite TEXT,
-      completada_en TEXT,
-      creada_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      actualizada_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (periodo_id) REFERENCES periodos(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-      FOREIGN KEY (persona_id) REFERENCES personas(id) ON UPDATE RESTRICT ON DELETE SET NULL
-    )
-  `)
-
-  await db.execute(`
-    CREATE INDEX IF NOT EXISTS ix_notas_tareas_periodo
-    ON notas_tareas_calificador(periodo_id, estado, fecha_limite)
-  `)
-
-  await db.execute(`
-    CREATE INDEX IF NOT EXISTS ix_notas_tareas_persona
-    ON notas_tareas_calificador(persona_id, periodo_id)
-  `)
-
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS trg_notas_tareas_periodo_cerrado_insert
-    BEFORE INSERT ON notas_tareas_calificador
-    WHEN EXISTS (
-      SELECT 1 FROM periodos p
-      WHERE p.id = NEW.periodo_id AND LOWER(p.estado) = 'cerrado'
-    )
-    BEGIN
-      SELECT RAISE(ABORT, 'El período está cerrado y solo permite lectura.');
-    END
-  `)
-
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS trg_notas_tareas_periodo_cerrado_update
-    BEFORE UPDATE ON notas_tareas_calificador
-    WHEN EXISTS (
-      SELECT 1 FROM periodos p
-      WHERE p.id = OLD.periodo_id AND LOWER(p.estado) = 'cerrado'
-    )
-    BEGIN
-      SELECT RAISE(ABORT, 'El período está cerrado y solo permite lectura.');
-    END
-  `)
-
-  await db.execute(`
-    CREATE TRIGGER IF NOT EXISTS trg_notas_tareas_periodo_cerrado_delete
-    BEFORE DELETE ON notas_tareas_calificador
-    WHEN EXISTS (
-      SELECT 1 FROM periodos p
-      WHERE p.id = OLD.periodo_id AND LOWER(p.estado) = 'cerrado'
-    )
-    BEGIN
-      SELECT RAISE(ABORT, 'El período está cerrado y solo permite lectura.');
-    END
+  await db.select<Array<{ ok: number }>>(`
+    SELECT 1 AS ok
+    FROM notas_tareas_calificador
+    LIMIT 1
   `)
 }
 
