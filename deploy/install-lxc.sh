@@ -33,7 +33,7 @@ rm -rf "$SRC_DIR"
 git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$SRC_DIR"
 cd "$SRC_DIR"
 
-npm ci
+npm install
 npm run build
 cargo build --release --manifest-path server/Cargo.toml
 
