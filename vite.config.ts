@@ -21,6 +21,7 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       '@tauri-apps/api/core': fileURLToPath(new URL('./src/web/tauri-core.ts', import.meta.url)),
+      '@tauri-apps/api/event': fileURLToPath(new URL('./src/web/tauri-event.ts', import.meta.url)),
       '@tauri-apps/plugin-sql': fileURLToPath(new URL('./src/web/tauri-sql.ts', import.meta.url)),
       '@tauri-apps/plugin-notification': fileURLToPath(new URL('./src/web/tauri-notification.ts', import.meta.url)),
       '@tauri-apps/plugin-dialog': fileURLToPath(new URL('./src/web/tauri-dialog.ts', import.meta.url)),
