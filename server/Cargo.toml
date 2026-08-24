@@ -9,7 +9,7 @@ tokio = { version = "1", features = ["full", "process"] }
 tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "mysql", "migrate", "chrono", "json"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "mysql", "migrate", "macros", "chrono", "json"] }
 argon2 = "0.5"
 rand = "0.8"
 sha2 = "0.10"
