@@ -57,6 +57,8 @@ jobs:
           sudo apt-get install -y python3-pymysql mariadb-client
       - name: Bootstrap MariaDB schema
         run: python3 deploy/bootstrap_mariadb.py --drop-existing
+      - name: Test backend compatibility and ownership scoping
+        run: cargo test --manifest-path server/Cargo.toml
       - name: Check backend
         run: cargo check --manifest-path server/Cargo.toml
       - name: Build backend
@@ -67,9 +69,49 @@ jobs:
           echo $! > /tmp/hvdigital.pid
           for i in {1..20}; do
             if curl -fsS http://127.0.0.1:8080/api/health; then
-              exit 0
+              break
+            fi
+            if [ "$i" = "20" ]; then
+              cat /tmp/hvdigital.log
+              exit 1
             fi
             sleep 1
           done
-          cat /tmp/hvdigital.log
-          exit 1
+      - name: Verify database ownership enforcement
+        run: |
+          cat > /tmp/ownership_test.sql <<'SQL'
+          INSERT INTO usuarios (usuario,password_hash,rol,activo)
+          VALUES ('ci_second_user','test-hash','CALIFICADOR',1);
+          SET @second_user = LAST_INSERT_ID();
+          INSERT INTO configuracion_usuario (usuario_id) VALUES (@second_user);
+
+          SET @hvdigital_usuario_id = @second_user;
+          INSERT INTO periodos (nombre,anio,fecha_inicio,fecha_termino,estado)
+          VALUES ('CI SECOND',2098,'2098-06-01','2099-05-31','abierto');
+          SET @second_period = LAST_INSERT_ID();
+
+          SELECT IF(
+            (SELECT propietario_usuario_id FROM periodos WHERE id=@second_period)=@second_user,
+            'OWNER_OK',
+            'OWNER_FAIL'
+          ) AS ownership_result;
+          SQL
+          output=$(mariadb --host=127.0.0.1 --port=3306 --user=hvdigital --password=hvdigital hvdigital < /tmp/ownership_test.sql)
+          echo "$output"
+          echo "$output" | grep -q OWNER_OK
+
+          first_user=$(mariadb -N --host=127.0.0.1 --port=3306 --user=hvdigital --password=hvdigital hvdigital -e "SELECT MIN(id) FROM usuarios WHERE usuario <> 'ci_second_user';")
+          second_user=$(mariadb -N --host=127.0.0.1 --port=3306 --user=hvdigital --password=hvdigital hvdigital -e "SELECT id FROM usuarios WHERE usuario='ci_second_user';")
+          first_period=$(mariadb -N --host=127.0.0.1 --port=3306 --user=hvdigital --password=hvdigital hvdigital -e "SELECT id FROM periodos WHERE propietario_usuario_id=${first_user} LIMIT 1;")
+
+          if [ -n "$first_period" ]; then
+            set +e
+            mariadb --host=127.0.0.1 --port=3306 --user=hvdigital --password=hvdigital hvdigital -e "SET @hvdigital_usuario_id=${second_user}; UPDATE periodos SET nombre='SHOULD FAIL' WHERE id=${first_period};" > /tmp/denied.out 2>&1
+            rc=$?
+            set -e
+            cat /tmp/denied.out
+            if [ "$rc" -eq 0 ]; then
+              echo 'Ownership violation: second user modified first user period.'
+              exit 1
+            fi
+          fi
