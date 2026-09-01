@@ -2,6 +2,7 @@ import { apiJson } from '../web/api'
 
 export type PeriodoUi = {
   id: number
+  globalId: number
   nombre: string
   estado: 'ABIERTO' | 'CERRADO'
   fechaInicio: string
@@ -28,6 +29,7 @@ function fechaVisual(fecha: string | null): string {
 export async function listarPeriodosUi(): Promise<PeriodoUi[]> {
   const filas = await apiJson<Array<{
     id: number
+    periodo_global_id: number | null
     nombre: string | null
     anio: number | null
     fecha_inicio: string | null
@@ -37,8 +39,9 @@ export async function listarPeriodosUi(): Promise<PeriodoUi[]> {
 
   return filas.map(fila => ({
     id: Number(fila.id),
+    globalId: Number(fila.periodo_global_id ?? fila.id),
     nombre: fila.nombre || (fila.anio ? `Período ${fila.anio}–${fila.anio + 1}` : `Período ${fila.id}`),
-    estado: String(fila.estado ?? 'abierto').toUpperCase() === 'CERRADO' ? 'CERRADO' : 'ABIERTO',
+    estado: String(fila.estado ?? 'cerrado').toUpperCase() === 'ABIERTO' ? 'ABIERTO' : 'CERRADO',
     fechaInicio: fechaVisual(fila.fecha_inicio),
     fechaTermino: fechaVisual(fila.fecha_termino),
   }))
