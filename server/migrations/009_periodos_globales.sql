@@ -53,10 +53,9 @@ ON DUPLICATE KEY UPDATE
     fecha_termino = VALUES(fecha_termino),
     estado = VALUES(estado);
 
-UPDATE periodos p
-INNER JOIN periodos_globales pg ON pg.anio = p.anio
-SET p.periodo_global_id = pg.id
-WHERE p.periodo_global_id IS NULL;
+-- No se actualiza masivamente `periodos` aquí porque sus triggers de propiedad
+-- exigen @hvdigital_usuario_id por propietario. El vínculo técnico se crea
+-- posteriormente por usuario desde asegurar_espejos_usuario().
 
 INSERT INTO vigencias_periodo_global (
     periodo_global_id, codigo_regimen, nombre_regimen,
@@ -72,7 +71,7 @@ SELECT
     1
 FROM vigencias_periodo vp
 INNER JOIN periodos p ON p.id = vp.periodo_id
-INNER JOIN periodos_globales pg ON pg.id = p.periodo_global_id
+INNER JOIN periodos_globales pg ON pg.anio = p.anio
 WHERE vp.activo = 1
 GROUP BY pg.id, vp.codigo_regimen
 ON DUPLICATE KEY UPDATE
@@ -82,8 +81,6 @@ ON DUPLICATE KEY UPDATE
     orden = VALUES(orden),
     activo = 1;
 
-UPDATE configuracion_usuario cu
-INNER JOIN periodos p ON p.id = cu.periodo_activo_id
-SET cu.periodo_global_activo_id = p.periodo_global_id
-WHERE cu.periodo_activo_id IS NOT NULL
-  AND p.periodo_global_id IS NOT NULL;
+-- `configuracion_usuario.periodo_global_activo_id` también se resuelve de forma
+-- segura al seleccionar un período. Evitamos escrituras globales que puedan
+-- interferir con el aislamiento por usuario.
