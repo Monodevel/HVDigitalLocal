@@ -1,4 +1,5 @@
 mod sql_compat;
+mod periodos_globales;
 
 use std::{collections::HashMap, env, net::SocketAddr, sync::Arc, time::{Duration, Instant}};
 use argon2::{password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, SaltString}, Argon2, PasswordVerifier};
@@ -53,7 +54,9 @@ async fn main(){
  let app=Router::new()
   .route("/api/health",get(health)).route("/api/auth/login",post(login)).route("/api/auth/me",get(auth_me)).route("/api/auth/logout",post(logout)).route("/api/auth/password",post(cambiar_password))
   .route("/api/configuracion/inicial",get(configuracion_inicial)).route("/api/configuracion/calificador",put(guardar_perfil_calificador)).route("/api/configuracion/periodo-inicial",post(crear_periodo_inicial)).route("/api/configuracion/serie",put(seleccionar_serie))
-  .route("/api/periodos",get(listar_periodos)).route("/api/periodos/{id}/seleccionar",post(seleccionar_periodo)).route("/api/calificados",get(listar_calificados))
+  .route("/api/periodos",get(periodos_globales::listar_periodos)).route("/api/periodos/{id}/seleccionar",post(periodos_globales::seleccionar_periodo)).route("/api/calificados",get(listar_calificados))
+  .route("/api/admin/periodos",get(periodos_globales::admin_listar_periodos).post(periodos_globales::admin_crear_periodo))
+  .route("/api/admin/periodos/{id}/estado",put(periodos_globales::admin_cambiar_estado_periodo))
   .route("/api/admin/usuarios",get(admin_listar_usuarios).post(admin_crear_usuario))
   .route("/api/db/select",post(db_select)).route("/api/db/execute",post(db_execute))
   .route("/api/backup/status",get(backup_status)).route("/api/backup/download",get(backup_download)).route("/api/backup/restore",post(backup_restore))
@@ -92,7 +95,7 @@ async fn cambiar_password(State(state):State<AppState>,headers:HeaderMap,Json(re
 }
 
 async fn configuracion_inicial(State(state):State<AppState>,headers:HeaderMap)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
- let s=autorizar(&state,&headers).await?;let row=sqlx::query("SELECT cu.usuario_id AS id,cu.estado,cu.paso_actual,u.calificador_directo_id,cu.periodo_activo_id,cu.completada_en,cu.actualizado_en,cd.grado_id,g.abreviatura AS grado_abreviatura,g.nombre AS grado_nombre,cd.run,cd.nombres,cd.apellido_paterno,cd.apellido_materno,cd.unidad_nombre,cd.unidad_sigla,cd.puesto,p.nombre AS periodo_nombre,p.anio AS periodo_anio,p.fecha_inicio AS periodo_fecha_inicio,p.fecha_termino AS periodo_fecha_termino,p.estado AS periodo_estado,cu.serie_resolucion FROM configuracion_usuario cu INNER JOIN usuarios u ON u.id=cu.usuario_id LEFT JOIN calificadores_directos cd ON cd.id=u.calificador_directo_id LEFT JOIN grados g ON g.id=cd.grado_id LEFT JOIN periodos p ON p.id=cu.periodo_activo_id AND p.propietario_usuario_id=u.id WHERE cu.usuario_id=? LIMIT 1").bind(s.usuario_id).fetch_one(&state.pool).await.map_err(internal)?;Ok(Json(row_to_json(&row).map_err(internal)?))
+ let s=autorizar(&state,&headers).await?;let row=sqlx::query("SELECT cu.usuario_id AS id,cu.estado,cu.paso_actual,u.calificador_directo_id,cu.periodo_activo_id,cu.periodo_global_activo_id,cu.completada_en,cu.actualizado_en,cd.grado_id,g.abreviatura AS grado_abreviatura,g.nombre AS grado_nombre,cd.run,cd.nombres,cd.apellido_paterno,cd.apellido_materno,cd.unidad_nombre,cd.unidad_sigla,cd.puesto,p.nombre AS periodo_nombre,p.anio AS periodo_anio,p.fecha_inicio AS periodo_fecha_inicio,p.fecha_termino AS periodo_fecha_termino,COALESCE(pg.estado,p.estado) AS periodo_estado,cu.serie_resolucion FROM configuracion_usuario cu INNER JOIN usuarios u ON u.id=cu.usuario_id LEFT JOIN calificadores_directos cd ON cd.id=u.calificador_directo_id LEFT JOIN grados g ON g.id=cd.grado_id LEFT JOIN periodos p ON p.id=cu.periodo_activo_id AND p.propietario_usuario_id=u.id LEFT JOIN periodos_globales pg ON pg.id=cu.periodo_global_activo_id WHERE cu.usuario_id=? LIMIT 1").bind(s.usuario_id).fetch_one(&state.pool).await.map_err(internal)?;Ok(Json(row_to_json(&row).map_err(internal)?))
 }
 fn validar_perfil(req:&CalificadorPerfilRequest)->Result<(),(StatusCode,Json<ApiError>)>{if req.grado_id<=0{return Err(bad("Debe seleccionar el grado del calificador."));}for(v,n)in[(&req.nombres,"los nombres"),(&req.apellido_paterno,"el apellido paterno"),(&req.unidad_nombre,"la unidad"),(&req.unidad_sigla,"la sigla"),(&req.puesto,"el puesto")]{if v.trim().is_empty(){return Err(bad(format!("Debe completar {n}.")));}}Ok(())}
 async fn guardar_perfil_calificador(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<CalificadorPerfilRequest>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
