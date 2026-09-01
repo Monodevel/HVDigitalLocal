@@ -18,10 +18,28 @@ export function obtenerSesionWeb(): SesionWeb | null {
   if (!raw) return null
   try { return JSON.parse(raw) as SesionWeb } catch { return null }
 }
-export function limpiarToken(): void {
-  sessionStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(SESSION_KEY)
-  delete document.documentElement.dataset.hvRole
+export function limpiarToken(): void { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(SESSION_KEY) }
+
+export async function restaurarSesionWeb(): Promise<SesionWeb | null> {
+  if (!obtenerToken()) return null
+  try {
+    const remoto = await apiJson<{
+      usuarioId: number
+      usuario: string
+      rol: 'ADMIN' | 'CALIFICADOR'
+      calificadorDirectoId: number | null
+    }>('/auth/me')
+    const anterior = obtenerSesionWeb()
+    const sesion: SesionWeb = {
+      ...remoto,
+      nombreMostrar: anterior?.usuarioId === remoto.usuarioId ? anterior.nombreMostrar : null,
+    }
+    guardarSesionWeb(sesion)
+    return sesion
+  } catch {
+    limpiarToken()
+    return null
+  }
 }
 
 export async function cerrarSesionWeb(): Promise<void> {
