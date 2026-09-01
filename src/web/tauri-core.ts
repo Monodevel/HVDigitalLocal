@@ -26,6 +26,7 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
         calificadorDirectoId: response.calificadorDirectoId ?? null,
         nombreMostrar: response.nombreMostrar ?? null,
       })
+      document.documentElement.dataset.hvRole = response.rol
     }
     return response as T
   }
@@ -43,6 +44,5 @@ export async function invoke<T>(command: string, args: Record<string, unknown> =
   }
 
   if (command === 'get_database_status') return apiJson<T>('/backup/status')
-
   throw new Error(`La función ${command} requiere un adaptador web específico.`)
 }
