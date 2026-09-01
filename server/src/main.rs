@@ -1,31 +1,19 @@
 mod sql_compat;
 
-use std::{
-    collections::HashMap,
-    env,
-    net::SocketAddr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, env, net::SocketAddr, sync::Arc, time::{Duration, Instant}};
 
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, SaltString},
-    Argon2, PasswordVerifier,
-};
+use argon2::{password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, SaltString}, Argon2, PasswordVerifier};
 use axum::{
     body::Body,
-    extract::{Multipart, State},
+    extract::{Multipart, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use sqlx::{
-    mysql::{MySqlPoolOptions, MySqlRow},
-    Column, MySql, MySqlPool, Row, TypeInfo, ValueRef,
-};
+use sqlx::{mysql::{MySqlPoolOptions, MySqlRow}, Column, MySql, MySqlPool, Row, TypeInfo, ValueRef};
 use tokio::{process::Command, sync::RwLock};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::{error, info};
@@ -37,29 +25,30 @@ const PASSWORD_HASH_INICIAL: &str = "$argon2id$v=19$m=65536,t=3,p=1$EnQ9ZasZWx+K
 const SESSION_TTL: Duration = Duration::from_secs(12 * 60 * 60);
 
 #[derive(Clone)]
+struct SessionInfo {
+    usuario_id: u64,
+    usuario: String,
+    rol: String,
+    calificador_directo_id: Option<u64>,
+    expires: Instant,
+}
+
+#[derive(Clone)]
 struct AppState {
     pool: MySqlPool,
-    sessions: Arc<RwLock<HashMap<String, Instant>>>,
+    sessions: Arc<RwLock<HashMap<String, SessionInfo>>>,
     database_url: String,
 }
 
 #[derive(Debug, Serialize)]
-struct ApiError {
-    error: String,
-}
-
+struct ApiError { error: String }
 impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        (StatusCode::BAD_REQUEST, Json(self)).into_response()
-    }
+    fn into_response(self) -> Response { (StatusCode::BAD_REQUEST, Json(self)).into_response() }
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LoginRequest {
-    usuario: String,
-    password: String,
-}
+struct LoginRequest { usuario: String, password: String }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,97 +57,109 @@ struct LoginResponse {
     usuario: String,
     mensaje: String,
     token: String,
+    usuario_id: u64,
+    rol: String,
+    calificador_directo_id: Option<u64>,
+    nombre_mostrar: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PasswordRequest {
+struct PasswordRequest { usuario: String, password_actual: String, password_nueva: String }
+
+#[derive(Deserialize)]
+struct SqlRequest { query: String, #[serde(default)] params: Vec<Value> }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExecuteResponse { rows_affected: u64, #[serde(skip_serializing_if = "Option::is_none")] last_insert_id: Option<u64> }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DatabaseStatus { name: String, path: String, exists: bool, size_bytes: u64, modified_unix: Option<u64> }
+
+#[derive(Serialize)]
+struct Health { ok: bool, service: &'static str, database: &'static str }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CalificadorPerfilRequest {
+    grado_id: u64,
+    run: Option<String>,
+    nombres: String,
+    apellido_paterno: String,
+    apellido_materno: Option<String>,
+    unidad_nombre: String,
+    unidad_sigla: String,
+    puesto: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PeriodoInicialRequest { anio_inicio: i32 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SerieRequest { prefijo: String }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CalificadosQuery { periodo_id: u64 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminCrearUsuarioRequest {
     usuario: String,
-    password_actual: String,
-    password_nueva: String,
-}
-
-#[derive(Deserialize)]
-struct SqlRequest {
-    query: String,
-    #[serde(default)]
-    params: Vec<Value>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ExecuteResponse {
-    rows_affected: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    last_insert_id: Option<u64>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DatabaseStatus {
-    name: String,
-    path: String,
-    exists: bool,
-    size_bytes: u64,
-    modified_unix: Option<u64>,
-}
-
-#[derive(Serialize)]
-struct Health {
-    ok: bool,
-    service: &'static str,
-    database: &'static str,
+    password: String,
+    grado_id: u64,
+    run: Option<String>,
+    nombres: String,
+    apellido_paterno: String,
+    apellido_materno: Option<String>,
+    unidad_nombre: String,
+    unidad_sigla: String,
+    puesto: String,
 }
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "hvdigital_web_server=info,tower_http=info".into()),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "hvdigital_web_server=info,tower_http=info".into()))
         .init();
 
-    let database_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "mysql://hvdigital:hvdigital@127.0.0.1:3306/hvdigital".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "mysql://hvdigital:hvdigital@127.0.0.1:3306/hvdigital".to_string());
     let bind = env::var("HVDIGITAL_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
 
     let pool = MySqlPoolOptions::new()
-        .max_connections(12)
-        .min_connections(1)
-        .acquire_timeout(Duration::from_secs(10))
-        .after_connect(|conn, _| {
-            Box::pin(async move {
-                sqlx::query("SET SESSION sql_mode = CONCAT(@@sql_mode, ',PIPES_AS_CONCAT')")
-                    .execute(&mut *conn)
-                    .await?;
-                sqlx::query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci")
-                    .execute(&mut *conn)
-                    .await?;
-                Ok(())
-            })
-        })
-        .connect(&database_url)
-        .await
+        .max_connections(12).min_connections(1).acquire_timeout(Duration::from_secs(10))
+        .after_connect(|conn, _| Box::pin(async move {
+            sqlx::query("SET SESSION sql_mode = CONCAT(@@sql_mode, ',PIPES_AS_CONCAT')").execute(&mut *conn).await?;
+            sqlx::query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci").execute(&mut *conn).await?;
+            sqlx::query("SET @hvdigital_usuario_id = NULL").execute(&mut *conn).await?;
+            Ok(())
+        }))
+        .connect(&database_url).await
         .unwrap_or_else(|e| panic!("No fue posible conectar con MariaDB: {e}"));
 
-    ejecutar_migraciones(&pool)
-        .await
-        .unwrap_or_else(|e| panic!("No fue posible preparar MariaDB: {e}"));
-    asegurar_usuario_inicial(&pool)
-        .await
-        .unwrap_or_else(|e| panic!("No fue posible preparar el usuario inicial: {e}"));
+    ejecutar_migraciones(&pool).await.unwrap_or_else(|e| panic!("No fue posible preparar MariaDB: {e}"));
+    asegurar_usuario_inicial(&pool).await.unwrap_or_else(|e| panic!("No fue posible preparar el usuario inicial: {e}"));
 
-    let state = AppState {
-        pool,
-        sessions: Arc::new(RwLock::new(HashMap::new())),
-        database_url,
-    };
+    let state = AppState { pool, sessions: Arc::new(RwLock::new(HashMap::new())), database_url };
 
     let app = Router::new()
         .route("/api/health", get(health))
         .route("/api/auth/login", post(login))
+        .route("/api/auth/me", get(auth_me))
+        .route("/api/auth/logout", post(logout))
         .route("/api/auth/password", post(cambiar_password))
+        .route("/api/configuracion/inicial", get(configuracion_inicial))
+        .route("/api/configuracion/calificador", put(guardar_perfil_calificador))
+        .route("/api/configuracion/periodo-inicial", post(crear_periodo_inicial))
+        .route("/api/configuracion/serie", put(seleccionar_serie))
+        .route("/api/periodos", get(listar_periodos))
+        .route("/api/periodos/{id}/seleccionar", post(seleccionar_periodo))
+        .route("/api/calificados", get(listar_calificados))
+        .route("/api/admin/usuarios", get(admin_listar_usuarios).post(admin_crear_usuario))
         .route("/api/db/select", post(db_select))
         .route("/api/db/execute", post(db_execute))
         .route("/api/backup/status", get(backup_status))
@@ -169,7 +170,7 @@ async fn main() {
         .layer(TraceLayer::new_for_http());
 
     let addr: SocketAddr = bind.parse().expect("HVDIGITAL_BIND no es válido");
-    info!(%addr, "HVDigital Web API iniciado con MariaDB");
+    info!(%addr, "HVDigital Web API iniciado con MariaDB multiusuario");
     let listener = tokio::net::TcpListener::bind(addr).await.expect("No fue posible abrir el puerto");
     axum::serve(listener, app).await.expect("El servidor finalizó inesperadamente");
 }
@@ -180,274 +181,265 @@ async fn ejecutar_migraciones(pool: &MySqlPool) -> Result<(), sqlx::migrate::Mig
 
 async fn asegurar_usuario_inicial(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT IGNORE INTO autenticacion_local (id, usuario, password_hash) VALUES (1, ?, ?)")
-        .bind(USUARIO_INICIAL)
-        .bind(PASSWORD_HASH_INICIAL)
-        .execute(pool)
-        .await?;
+        .bind(USUARIO_INICIAL).bind(PASSWORD_HASH_INICIAL).execute(pool).await?;
+    // Tras migración multiusuario, garantiza que el usuario inicial siempre exista.
+    sqlx::query("INSERT IGNORE INTO usuarios (usuario,password_hash,rol,activo) VALUES (?,?, 'ADMIN',1)")
+        .bind(USUARIO_INICIAL).bind(PASSWORD_HASH_INICIAL).execute(pool).await?;
+    let uid: u64 = sqlx::query_scalar("SELECT id FROM usuarios WHERE usuario=? LIMIT 1").bind(USUARIO_INICIAL).fetch_one(pool).await?;
+    sqlx::query("INSERT IGNORE INTO configuracion_usuario (usuario_id) VALUES (?)").bind(uid).execute(pool).await?;
     Ok(())
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {
-    let ok = sqlx::query_scalar::<_, i32>("SELECT 1")
-        .fetch_one(&state.pool)
-        .await
-        .is_ok();
+    let ok = sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&state.pool).await.is_ok();
     let status = if ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
     (status, Json(Health { ok, service: "HVDigital Web API", database: "MariaDB" }))
 }
 
-async fn login(
-    State(state): State<AppState>,
-    Json(req): Json<LoginRequest>,
-) -> Result<Json<LoginResponse>, (StatusCode, Json<ApiError>)> {
-    let row = sqlx::query("SELECT usuario, password_hash FROM autenticacion_local WHERE id = 1 LIMIT 1")
-        .fetch_one(&state.pool).await.map_err(internal)?;
-    let usuario_guardado: String = row.try_get("usuario").map_err(internal)?;
+async fn login(State(state): State<AppState>, Json(req): Json<LoginRequest>) -> Result<Json<LoginResponse>, (StatusCode, Json<ApiError>)> {
+    let row = sqlx::query("SELECT u.id,u.usuario,u.password_hash,u.rol,u.calificador_directo_id,u.activo, TRIM(CONCAT_WS(' ',g.abreviatura,cd.nombres,cd.apellido_paterno,cd.apellido_materno)) AS nombre_mostrar FROM usuarios u LEFT JOIN calificadores_directos cd ON cd.id=u.calificador_directo_id LEFT JOIN grados g ON g.id=cd.grado_id WHERE LOWER(u.usuario)=LOWER(?) LIMIT 1")
+        .bind(req.usuario.trim()).fetch_optional(&state.pool).await.map_err(internal)?
+        .ok_or_else(|| unauthorized("Usuario o contraseña incorrectos."))?;
+    let activo: i64 = row.try_get("activo").unwrap_or(0);
+    if activo != 1 { return Err(unauthorized("La cuenta se encuentra deshabilitada.")); }
     let hash_guardado: String = row.try_get("password_hash").map_err(internal)?;
-    let hash = PasswordHash::new(&hash_guardado)
-        .map_err(|_| unauthorized("La configuración de autenticación no es válida."))?;
-    let valida = Argon2::default().verify_password(req.password.as_bytes(), &hash).is_ok();
-    if !valida || !req.usuario.trim().eq_ignore_ascii_case(&usuario_guardado) {
+    let hash = PasswordHash::new(&hash_guardado).map_err(|_| unauthorized("La configuración de autenticación no es válida."))?;
+    if Argon2::default().verify_password(req.password.as_bytes(), &hash).is_err() {
         return Err(unauthorized("Usuario o contraseña incorrectos."));
     }
+    let usuario_id: u64 = row.try_get("id").map_err(internal)?;
+    let usuario: String = row.try_get("usuario").map_err(internal)?;
+    let rol: String = row.try_get("rol").map_err(internal)?;
+    let calificador_directo_id: Option<u64> = row.try_get("calificador_directo_id").ok();
+    let nombre_mostrar: Option<String> = row.try_get("nombre_mostrar").ok().filter(|v: &String| !v.trim().is_empty());
+    sqlx::query("UPDATE usuarios SET ultimo_acceso_en=NOW() WHERE id=?").bind(usuario_id).execute(&state.pool).await.map_err(internal)?;
     let token = Uuid::new_v4().to_string();
-    state.sessions.write().await.insert(token.clone(), Instant::now() + SESSION_TTL);
-    Ok(Json(LoginResponse {
-        autenticado: true,
-        usuario: usuario_guardado,
-        mensaje: "Acceso autorizado.".to_string(),
-        token,
-    }))
+    state.sessions.write().await.insert(token.clone(), SessionInfo {
+        usuario_id, usuario: usuario.clone(), rol: rol.clone(), calificador_directo_id, expires: Instant::now()+SESSION_TTL,
+    });
+    auditoria(&state.pool, usuario_id, "LOGIN", "sesion", None, None).await;
+    Ok(Json(LoginResponse { autenticado:true, usuario, mensaje:"Acceso autorizado.".into(), token, usuario_id, rol, calificador_directo_id, nombre_mostrar }))
 }
 
-async fn cambiar_password(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(req): Json<PasswordRequest>,
-) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
-    autorizar(&state, &headers).await?;
-    if req.password_nueva.len() < 10 {
-        return Err(bad("La nueva contraseña debe tener al menos 10 caracteres."));
-    }
-    if req.password_nueva == req.password_actual {
-        return Err(bad("La nueva contraseña debe ser distinta de la actual."));
-    }
-    let row = sqlx::query("SELECT usuario, password_hash FROM autenticacion_local WHERE id = 1 LIMIT 1")
-        .fetch_one(&state.pool).await.map_err(internal)?;
-    let usuario_guardado: String = row.try_get("usuario").map_err(internal)?;
-    let hash_guardado: String = row.try_get("password_hash").map_err(internal)?;
-    if !req.usuario.trim().eq_ignore_ascii_case(&usuario_guardado) {
-        return Err(unauthorized("El usuario no corresponde a la sesión configurada."));
-    }
-    let hash = PasswordHash::new(&hash_guardado).map_err(|_| internal("Hash de autenticación inválido"))?;
-    if Argon2::default().verify_password(req.password_actual.as_bytes(), &hash).is_err() {
-        return Err(unauthorized("La contraseña actual no es correcta."));
-    }
-    let salt = SaltString::generate(&mut OsRng);
-    let nuevo_hash = Argon2::default()
-        .hash_password(req.password_nueva.as_bytes(), &salt)
-        .map_err(|_| internal("No fue posible proteger la nueva contraseña."))?
-        .to_string();
-    sqlx::query("UPDATE autenticacion_local SET password_hash=?, password_actualizada_en=NOW(), actualizada_en=NOW() WHERE id=1")
-        .bind(nuevo_hash).execute(&state.pool).await.map_err(internal)?;
-    Ok(Json(serde_json::json!({ "message": "Contraseña actualizada correctamente." })))
+async fn auth_me(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
+    let s = autorizar(&state, &headers).await?;
+    Ok(Json(serde_json::json!({"usuarioId":s.usuario_id,"usuario":s.usuario,"rol":s.rol,"calificadorDirectoId":s.calificador_directo_id})))
 }
 
-async fn db_select(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(req): Json<SqlRequest>,
-) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
-    autorizar(&state, &headers).await?;
-    if sql_compat::es_pragma(&req.query) { return Ok(Json(Value::Array(vec![]))); }
-    if !sql_compat::es_lectura(&req.query) {
-        return Err(bad("La ruta select solo admite consultas de lectura."));
-    }
-    let sql = sql_compat::normalizar_sql(&req.query);
-    let mut query = sqlx::query(&sql);
-    for value in &req.params { query = bind_json(query, value); }
-    let rows = query.fetch_all(&state.pool).await.map_err(|e| {
-        error!(sql=%sql, error=%e, "Error de consulta MariaDB");
-        bad(format!("Error de consulta: {e}"))
-    })?;
-    let mut salida = Vec::with_capacity(rows.len());
-    for row in rows { salida.push(row_to_json(&row).map_err(internal)?); }
-    Ok(Json(Value::Array(salida)))
+async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
+    let token = token_headers(&headers)?;
+    if let Some(s) = state.sessions.write().await.remove(&token) { auditoria(&state.pool,s.usuario_id,"LOGOUT","sesion",None,None).await; }
+    Ok(Json(serde_json::json!({"ok":true})))
 }
 
-async fn db_execute(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(req): Json<SqlRequest>,
-) -> Result<Json<ExecuteResponse>, (StatusCode, Json<ApiError>)> {
-    autorizar(&state, &headers).await?;
-    if sql_compat::es_pragma(&req.query) {
-        return Ok(Json(ExecuteResponse { rows_affected: 0, last_insert_id: None }));
-    }
-    if sql_compat::es_lectura(&req.query) { return Err(bad("La ruta execute no admite SELECT.")); }
-    let sql = sql_compat::normalizar_sql(&req.query);
-    let mut query = sqlx::query(&sql);
-    for value in &req.params { query = bind_json(query, value); }
-    let result = query.execute(&state.pool).await.map_err(|e| {
-        error!(sql=%sql, error=%e, "Error de escritura MariaDB");
-        bad(format!("Error de escritura: {e}"))
-    })?;
-    Ok(Json(ExecuteResponse {
-        rows_affected: result.rows_affected(),
-        last_insert_id: match result.last_insert_id() { 0 => None, id => Some(id) },
-    }))
+async fn cambiar_password(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<PasswordRequest>) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
+    let s = autorizar(&state,&headers).await?;
+    if !req.usuario.trim().eq_ignore_ascii_case(&s.usuario) { return Err(unauthorized("El usuario no corresponde a la sesión.")); }
+    if req.password_nueva.len()<10 { return Err(bad("La nueva contraseña debe tener al menos 10 caracteres.")); }
+    if req.password_nueva==req.password_actual { return Err(bad("La nueva contraseña debe ser distinta de la actual.")); }
+    let hash_guardado: String = sqlx::query_scalar("SELECT password_hash FROM usuarios WHERE id=?").bind(s.usuario_id).fetch_one(&state.pool).await.map_err(internal)?;
+    let hash=PasswordHash::new(&hash_guardado).map_err(|_|internal("Hash de autenticación inválido"))?;
+    if Argon2::default().verify_password(req.password_actual.as_bytes(),&hash).is_err(){return Err(unauthorized("La contraseña actual no es correcta."));}
+    let salt=SaltString::generate(&mut OsRng);
+    let nuevo=Argon2::default().hash_password(req.password_nueva.as_bytes(),&salt).map_err(|_|internal("No fue posible proteger la nueva contraseña."))?.to_string();
+    sqlx::query("UPDATE usuarios SET password_hash=?,password_actualizada_en=NOW() WHERE id=?").bind(nuevo).bind(s.usuario_id).execute(&state.pool).await.map_err(internal)?;
+    auditoria(&state.pool,s.usuario_id,"CAMBIAR_PASSWORD","usuario",Some(s.usuario_id),None).await;
+    Ok(Json(serde_json::json!({"message":"Contraseña actualizada correctamente."})))
 }
 
-fn bind_json<'q>(
-    query: sqlx::query::Query<'q, MySql, sqlx::mysql::MySqlArguments>,
-    value: &'q Value,
-) -> sqlx::query::Query<'q, MySql, sqlx::mysql::MySqlArguments> {
-    match value {
-        Value::Null => query.bind(Option::<String>::None),
-        Value::Bool(v) => query.bind(*v),
-        Value::Number(v) if v.is_i64() => query.bind(v.as_i64().unwrap_or_default()),
-        Value::Number(v) if v.is_u64() => query.bind(v.as_u64().unwrap_or_default()),
-        Value::Number(v) => query.bind(v.as_f64().unwrap_or_default()),
-        Value::String(v) => query.bind(v),
-        Value::Array(_) | Value::Object(_) => query.bind(value.to_string()),
-    }
+async fn configuracion_inicial(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
+    let s=autorizar(&state,&headers).await?;
+    let row=sqlx::query("SELECT cu.usuario_id AS id,cu.estado,cu.paso_actual,u.calificador_directo_id,cu.periodo_activo_id,cu.completada_en,cu.actualizado_en,cd.grado_id,g.abreviatura AS grado_abreviatura,g.nombre AS grado_nombre,cd.run,cd.nombres,cd.apellido_paterno,cd.apellido_materno,cd.unidad_nombre,cd.unidad_sigla,cd.puesto,p.nombre AS periodo_nombre,p.anio AS periodo_anio,p.fecha_inicio AS periodo_fecha_inicio,p.fecha_termino AS periodo_fecha_termino,p.estado AS periodo_estado,cu.serie_resolucion FROM configuracion_usuario cu INNER JOIN usuarios u ON u.id=cu.usuario_id LEFT JOIN calificadores_directos cd ON cd.id=u.calificador_directo_id LEFT JOIN grados g ON g.id=cd.grado_id LEFT JOIN periodos p ON p.id=cu.periodo_activo_id AND p.propietario_usuario_id=u.id WHERE cu.usuario_id=? LIMIT 1")
+        .bind(s.usuario_id).fetch_one(&state.pool).await.map_err(internal)?;
+    Ok(Json(row_to_json(&row).map_err(internal)?))
 }
 
-fn row_to_json(row: &MySqlRow) -> Result<Value, sqlx::Error> {
-    let mut object = Map::new();
-    for (i, column) in row.columns().iter().enumerate() {
-        let raw = row.try_get_raw(i)?;
-        if raw.is_null() {
-            object.insert(column.name().to_string(), Value::Null);
-            continue;
-        }
-        let type_name = column.type_info().name().to_uppercase();
-        let value = if ["TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT", "YEAR"].iter().any(|t| type_name.contains(t)) {
-            match row.try_get::<i64, _>(i) {
-                Ok(v) => Value::from(v),
-                Err(_) => Value::String(row.try_get::<String, _>(i).unwrap_or_default()),
-            }
-        } else if ["FLOAT", "DOUBLE", "DECIMAL", "NUMERIC"].iter().any(|t| type_name.contains(t)) {
-            match row.try_get::<f64, _>(i) {
-                Ok(v) => serde_json::Number::from_f64(v).map(Value::Number).unwrap_or(Value::Null),
-                Err(_) => Value::String(row.try_get::<String, _>(i).unwrap_or_default()),
-            }
-        } else if ["BLOB", "BINARY", "VARBINARY"].iter().any(|t| type_name.contains(t)) {
-            Value::String(hex::encode(row.try_get::<Vec<u8>, _>(i).unwrap_or_default()))
-        } else {
-            Value::String(row.try_get::<String, _>(i).unwrap_or_default())
-        };
-        object.insert(column.name().to_string(), value);
+fn validar_perfil(req:&CalificadorPerfilRequest)->Result<(),(StatusCode,Json<ApiError>)>{
+    if req.grado_id==0{return Err(bad("Debe seleccionar el grado del calificador."));}
+    for (v,n) in [(&req.nombres,"los nombres"),(&req.apellido_paterno,"el apellido paterno"),(&req.unidad_nombre,"la unidad"),(&req.unidad_sigla,"la sigla"),(&req.puesto,"el puesto")] { if v.trim().is_empty(){return Err(bad(format!("Debe completar {n}.")));} }
+    Ok(())
+}
+
+async fn guardar_perfil_calificador(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<CalificadorPerfilRequest>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?; validar_perfil(&req)?;
+    let mut tx=state.pool.begin().await.map_err(internal)?;
+    let existente:Option<u64>=sqlx::query_scalar("SELECT calificador_directo_id FROM usuarios WHERE id=?").bind(s.usuario_id).fetch_one(&mut *tx).await.map_err(internal)?;
+    let cid=if let Some(id)=existente {
+        sqlx::query("UPDATE calificadores_directos SET grado_id=?,run=?,nombres=?,apellido_paterno=?,apellido_materno=?,unidad_nombre=?,unidad_sigla=?,puesto=?,actualizado_en=NOW() WHERE id=?")
+          .bind(req.grado_id).bind(limpio(req.run.as_deref())).bind(req.nombres.trim()).bind(req.apellido_paterno.trim()).bind(limpio(req.apellido_materno.as_deref())).bind(req.unidad_nombre.trim()).bind(req.unidad_sigla.trim().to_uppercase()).bind(req.puesto.trim()).bind(id).execute(&mut *tx).await.map_err(internal)?; id
+    } else {
+        let r=sqlx::query("INSERT INTO calificadores_directos(grado_id,run,nombres,apellido_paterno,apellido_materno,unidad_nombre,unidad_sigla,puesto,activo) VALUES(?,?,?,?,?,?,?,?,1)")
+          .bind(req.grado_id).bind(limpio(req.run.as_deref())).bind(req.nombres.trim()).bind(req.apellido_paterno.trim()).bind(limpio(req.apellido_materno.as_deref())).bind(req.unidad_nombre.trim()).bind(req.unidad_sigla.trim().to_uppercase()).bind(req.puesto.trim()).execute(&mut *tx).await.map_err(internal)?;
+        let id=r.last_insert_id(); sqlx::query("UPDATE usuarios SET calificador_directo_id=? WHERE id=?").bind(id).bind(s.usuario_id).execute(&mut *tx).await.map_err(internal)?; id
+    };
+    sqlx::query("UPDATE configuracion_usuario SET estado=CASE WHEN estado='NO_CONFIGURADA' THEN 'EN_PROGRESO' ELSE estado END,paso_actual=GREATEST(paso_actual,2) WHERE usuario_id=?").bind(s.usuario_id).execute(&mut *tx).await.map_err(internal)?;
+    tx.commit().await.map_err(internal)?;
+    auditoria(&state.pool,s.usuario_id,"GUARDAR_PERFIL","calificador",Some(cid),None).await;
+    Ok(Json(serde_json::json!({"calificadorId":cid})))
+}
+
+async fn crear_periodo_inicial(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<PeriodoInicialRequest>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?;
+    let actual=chrono::Local::now().format("%Y").to_string().parse::<i32>().unwrap_or(2026);
+    if req.anio_inicio<actual-10 || req.anio_inicio>actual+5{return Err(bad("El año seleccionado no es válido."));}
+    let perfil:Option<u64>=sqlx::query_scalar("SELECT calificador_directo_id FROM usuarios WHERE id=?").bind(s.usuario_id).fetch_one(&state.pool).await.map_err(internal)?;
+    if perfil.is_none(){return Err(bad("Primero debe registrar el perfil del calificador."));}
+    let mut conn=state.pool.acquire().await.map_err(internal)?; set_usuario(&mut conn,s.usuario_id).await?;
+    let anio_fin=req.anio_inicio+1; let nombre=format!("{}-{}",req.anio_inicio,anio_fin);
+    let existente:Option<u64>=sqlx::query_scalar("SELECT id FROM periodos WHERE propietario_usuario_id=? AND anio=? LIMIT 1").bind(s.usuario_id).bind(req.anio_inicio).fetch_optional(&mut *conn).await.map_err(internal)?.flatten();
+    let periodo_id=if let Some(id)=existente {
+        sqlx::query("UPDATE periodos SET nombre=?,fecha_inicio=?,fecha_termino=?,estado='abierto' WHERE id=?").bind(&nombre).bind(format!("{}-06-01",req.anio_inicio)).bind(format!("{}-07-31",anio_fin)).bind(id).execute(&mut *conn).await.map_err(internal)?; id
+    } else {
+        sqlx::query("INSERT INTO periodos(nombre,anio,fecha_inicio,fecha_termino,estado) VALUES(?,?,?,?,'abierto')").bind(&nombre).bind(req.anio_inicio).bind(format!("{}-06-01",req.anio_inicio)).bind(format!("{}-07-31",anio_fin)).execute(&mut *conn).await.map_err(internal)?.last_insert_id()
+    };
+    let vigencias=[("OFICIALES","Oficiales",format!("{}-07-01",req.anio_inicio),format!("{}-06-30",anio_fin),1),("CP_TROPA_JORNAL","Cuadro Permanente, Tropa Profesional y Personal a Jornal",format!("{}-06-01",req.anio_inicio),format!("{}-05-31",anio_fin),2),("PERSONAL_CIVIL","Personal civil",format!("{}-08-01",req.anio_inicio),format!("{}-07-31",anio_fin),3)];
+    for (codigo,nombre_v,inicio,termino,orden) in vigencias {
+        sqlx::query("INSERT INTO vigencias_periodo(periodo_id,codigo_regimen,nombre_regimen,fecha_inicio,fecha_termino,orden,activo) VALUES(?,?,?,?,?,?,1) ON DUPLICATE KEY UPDATE nombre_regimen=VALUES(nombre_regimen),fecha_inicio=VALUES(fecha_inicio),fecha_termino=VALUES(fecha_termino),orden=VALUES(orden),activo=1")
+          .bind(periodo_id).bind(codigo).bind(nombre_v).bind(inicio).bind(termino).bind(orden).execute(&mut *conn).await.map_err(internal)?;
+    }
+    sqlx::query("UPDATE configuracion_usuario SET periodo_activo_id=?,estado='CONFIGURADA_SIN_PERSONAL',paso_actual=3 WHERE usuario_id=?").bind(periodo_id).bind(s.usuario_id).execute(&mut *conn).await.map_err(internal)?;
+    let rows=sqlx::query("SELECT id,periodo_id,codigo_regimen,nombre_regimen,fecha_inicio,fecha_termino,orden FROM vigencias_periodo WHERE propietario_usuario_id=? AND periodo_id=? AND activo=1 ORDER BY orden").bind(s.usuario_id).bind(periodo_id).fetch_all(&mut *conn).await.map_err(internal)?;
+    let vigencias_json=rows.iter().map(row_to_json).collect::<Result<Vec<_>,_>>().map_err(internal)?;
+    auditoria(&state.pool,s.usuario_id,"CREAR_PERIODO","periodo",Some(periodo_id),None).await;
+    Ok(Json(serde_json::json!({"periodoId":periodo_id,"nombre":nombre,"anioInicio":req.anio_inicio,"anioTermino":anio_fin,"vigencias":vigencias_json})))
+}
+
+async fn seleccionar_serie(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<SerieRequest>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?; if req.prefijo!="1530"&&req.prefijo!="6060"{return Err(bad("Serie no válida."));}
+    sqlx::query("UPDATE configuracion_usuario SET serie_resolucion=? WHERE usuario_id=?").bind(&req.prefijo).bind(s.usuario_id).execute(&state.pool).await.map_err(internal)?;
+    Ok(Json(serde_json::json!({"prefijo":req.prefijo})))
+}
+
+async fn listar_periodos(State(state):State<AppState>,headers:HeaderMap)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?;
+    let rows=sqlx::query("SELECT id,nombre,anio,fecha_inicio,fecha_termino,estado FROM periodos WHERE propietario_usuario_id=? ORDER BY fecha_inicio DESC,id DESC").bind(s.usuario_id).fetch_all(&state.pool).await.map_err(internal)?;
+    Ok(Json(Value::Array(rows.iter().map(row_to_json).collect::<Result<Vec<_>,_>>().map_err(internal)?)))
+}
+
+async fn seleccionar_periodo(State(state):State<AppState>,headers:HeaderMap,Path(id):Path<u64>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?;
+    let existe:Option<u64>=sqlx::query_scalar("SELECT id FROM periodos WHERE id=? AND propietario_usuario_id=?").bind(id).bind(s.usuario_id).fetch_optional(&state.pool).await.map_err(internal)?.flatten();
+    if existe.is_none(){return Err(not_found("El período no pertenece al usuario autenticado."));}
+    sqlx::query("UPDATE configuracion_usuario SET periodo_activo_id=? WHERE usuario_id=?").bind(id).bind(s.usuario_id).execute(&state.pool).await.map_err(internal)?;
+    Ok(Json(serde_json::json!({"ok":true,"periodoId":id})))
+}
+
+async fn listar_calificados(State(state):State<AppState>,headers:HeaderMap,Query(q):Query<CalificadosQuery>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?;
+    let rows=sqlx::query("SELECT ex.id AS expediente_id,ehv.hoja_vida_id,p.id AS persona_id,COALESCE(g.abreviatura,cp.abreviatura,g.nombre,cp.nombre,'') AS grado,p.nombres,p.apellido_paterno,p.apellido_materno,p.run,d.unidad_nombre,ex.estado AS expediente_estado,p.activo AS persona_activa FROM expedientes_calificacion ex INNER JOIN designaciones_calificacion d ON d.id=ex.designacion_id AND d.propietario_usuario_id=ex.propietario_usuario_id INNER JOIN personas p ON p.id=ex.persona_id AND p.propietario_usuario_id=ex.propietario_usuario_id LEFT JOIN grados g ON g.id=d.grado_id_inicio LEFT JOIN calidades_personal cp ON cp.id=d.calidad_personal_id_inicio LEFT JOIN expediente_hojas_vida ehv ON ehv.expediente_id=ex.id AND ehv.propietario_usuario_id=ex.propietario_usuario_id WHERE ex.propietario_usuario_id=? AND ex.periodo_id=? AND UPPER(COALESCE(ex.estado,'ABIERTO'))<>'ANULADO' AND UPPER(COALESCE(d.estado,'ACTIVA'))<>'ANULADA' ORDER BY COALESCE(g.abreviatura,cp.abreviatura,''),p.apellido_paterno,p.apellido_materno,p.nombres")
+      .bind(s.usuario_id).bind(q.periodo_id).fetch_all(&state.pool).await.map_err(internal)?;
+    Ok(Json(Value::Array(rows.iter().map(row_to_json).collect::<Result<Vec<_>,_>>().map_err(internal)?)))
+}
+
+async fn admin_listar_usuarios(State(state):State<AppState>,headers:HeaderMap)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let _=autorizar_admin(&state,&headers).await?;
+    let rows=sqlx::query("SELECT u.id,u.usuario,u.rol,u.activo,u.ultimo_acceso_en,u.calificador_directo_id,g.abreviatura AS grado,cd.run,cd.nombres,cd.apellido_paterno,cd.apellido_materno,cd.unidad_nombre,cd.unidad_sigla,cd.puesto,cu.estado AS configuracion_estado,cu.periodo_activo_id FROM usuarios u LEFT JOIN calificadores_directos cd ON cd.id=u.calificador_directo_id LEFT JOIN grados g ON g.id=cd.grado_id LEFT JOIN configuracion_usuario cu ON cu.usuario_id=u.id ORDER BY u.usuario").fetch_all(&state.pool).await.map_err(internal)?;
+    Ok(Json(Value::Array(rows.iter().map(row_to_json).collect::<Result<Vec<_>,_>>().map_err(internal)?)))
+}
+
+async fn admin_crear_usuario(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<AdminCrearUsuarioRequest>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let admin=autorizar_admin(&state,&headers).await?;
+    if req.usuario.trim().len()<3{return Err(bad("El usuario debe tener al menos 3 caracteres."));}
+    if req.password.len()<10{return Err(bad("La contraseña inicial debe tener al menos 10 caracteres."));}
+    let perfil=CalificadorPerfilRequest{grado_id:req.grado_id,run:req.run.clone(),nombres:req.nombres.clone(),apellido_paterno:req.apellido_paterno.clone(),apellido_materno:req.apellido_materno.clone(),unidad_nombre:req.unidad_nombre.clone(),unidad_sigla:req.unidad_sigla.clone(),puesto:req.puesto.clone()}; validar_perfil(&perfil)?;
+    let salt=SaltString::generate(&mut OsRng); let hash=Argon2::default().hash_password(req.password.as_bytes(),&salt).map_err(|_|internal("No fue posible proteger la contraseña."))?.to_string();
+    let mut tx=state.pool.begin().await.map_err(internal)?;
+    let existe:i64=sqlx::query_scalar("SELECT COUNT(*) FROM usuarios WHERE LOWER(usuario)=LOWER(?)").bind(req.usuario.trim()).fetch_one(&mut *tx).await.map_err(internal)?; if existe>0{return Err(bad("El nombre de usuario ya existe."));}
+    let cr=sqlx::query("INSERT INTO calificadores_directos(grado_id,run,nombres,apellido_paterno,apellido_materno,unidad_nombre,unidad_sigla,puesto,activo) VALUES(?,?,?,?,?,?,?,?,1)").bind(req.grado_id).bind(limpio(req.run.as_deref())).bind(req.nombres.trim()).bind(req.apellido_paterno.trim()).bind(limpio(req.apellido_materno.as_deref())).bind(req.unidad_nombre.trim()).bind(req.unidad_sigla.trim().to_uppercase()).bind(req.puesto.trim()).execute(&mut *tx).await.map_err(internal)?; let cid=cr.last_insert_id();
+    let ur=sqlx::query("INSERT INTO usuarios(usuario,password_hash,rol,calificador_directo_id,activo) VALUES(?,?,'CALIFICADOR',?,1)").bind(req.usuario.trim()).bind(hash).bind(cid).execute(&mut *tx).await.map_err(internal)?; let uid=ur.last_insert_id();
+    sqlx::query("INSERT INTO configuracion_usuario(usuario_id,estado,paso_actual) VALUES(?,'EN_PROGRESO',2)").bind(uid).execute(&mut *tx).await.map_err(internal)?;
+    tx.commit().await.map_err(internal)?; auditoria(&state.pool,admin.usuario_id,"CREAR_USUARIO","usuario",Some(uid),Some(serde_json::json!({"usuario":req.usuario}))).await;
+    Ok(Json(serde_json::json!({"id":uid,"usuario":req.usuario,"calificadorDirectoId":cid,"rol":"CALIFICADOR"})))
+}
+
+async fn db_select(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<SqlRequest>)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?;
+    if sql_compat::es_pragma(&req.query){return Ok(Json(Value::Array(vec![])));}
+    if !sql_compat::es_lectura(&req.query){return Err(bad("La ruta select solo admite consultas de lectura."));}
+    let normal=sql_compat::normalizar_sql(&req.query); let sql=sql_compat::aplicar_scope_lectura(&normal,s.usuario_id);
+    let mut conn=state.pool.acquire().await.map_err(internal)?; set_usuario(&mut conn,s.usuario_id).await?;
+    let mut query=sqlx::query(&sql); for value in &req.params{query=bind_json(query,value);}
+    let rows=query.fetch_all(&mut *conn).await.map_err(|e|{error!(sql=%sql,error=%e,"Error de consulta MariaDB");bad(format!("Error de consulta: {e}"))})?;
+    Ok(Json(Value::Array(rows.iter().map(row_to_json).collect::<Result<Vec<_>,_>>().map_err(internal)?)))
+}
+
+async fn db_execute(State(state):State<AppState>,headers:HeaderMap,Json(req):Json<SqlRequest>)->Result<Json<ExecuteResponse>,(StatusCode,Json<ApiError>)>{
+    let s=autorizar(&state,&headers).await?;
+    if sql_compat::es_pragma(&req.query)||sql_compat::es_ddl_notas_legacy(&req.query){return Ok(Json(ExecuteResponse{rows_affected:0,last_insert_id:None}));}
+    if sql_compat::es_lectura(&req.query){return Err(bad("La ruta execute no admite SELECT."));}
+    let primera=req.query.trim_start().split_whitespace().next().unwrap_or("").to_ascii_uppercase();
+    if matches!(primera.as_str(),"CREATE"|"ALTER"|"DROP"|"TRUNCATE") && s.rol!="ADMIN" { return Err(forbidden("La modificación del esquema está reservada al administrador.")); }
+    let sql=sql_compat::normalizar_sql(&req.query); let mut conn=state.pool.acquire().await.map_err(internal)?; set_usuario(&mut conn,s.usuario_id).await?;
+    let mut query=sqlx::query(&sql); for value in &req.params{query=bind_json(query,value);}
+    let result=query.execute(&mut *conn).await.map_err(|e|{error!(sql=%sql,error=%e,"Error de escritura MariaDB");bad(format!("Error de escritura: {e}"))})?;
+    Ok(Json(ExecuteResponse{rows_affected:result.rows_affected(),last_insert_id:match result.last_insert_id(){0=>None,id=>Some(id)}}))
+}
+
+async fn set_usuario(conn:&mut sqlx::pool::PoolConnection<MySql>,usuario_id:u64)->Result<(),(StatusCode,Json<ApiError>)>{
+    sqlx::query("SET @hvdigital_usuario_id = ?").bind(usuario_id).execute(&mut **conn).await.map_err(internal)?; Ok(())
+}
+
+fn bind_json<'q>(query:sqlx::query::Query<'q,MySql,sqlx::mysql::MySqlArguments>,value:&'q Value)->sqlx::query::Query<'q,MySql,sqlx::mysql::MySqlArguments>{
+    match value { Value::Null=>query.bind(Option::<String>::None),Value::Bool(v)=>query.bind(*v),Value::Number(v) if v.is_i64()=>query.bind(v.as_i64().unwrap_or_default()),Value::Number(v) if v.is_u64()=>query.bind(v.as_u64().unwrap_or_default()),Value::Number(v)=>query.bind(v.as_f64().unwrap_or_default()),Value::String(v)=>query.bind(v),Value::Array(_)|Value::Object(_)=>query.bind(value.to_string()) }
+}
+
+fn row_to_json(row:&MySqlRow)->Result<Value,sqlx::Error>{
+    let mut object=Map::new();
+    for (i,column) in row.columns().iter().enumerate(){
+        let raw=row.try_get_raw(i)?; if raw.is_null(){object.insert(column.name().to_string(),Value::Null);continue;}
+        let t=column.type_info().name().to_uppercase();
+        let value=if ["TINYINT","SMALLINT","MEDIUMINT","INT","INTEGER","BIGINT","YEAR"].iter().any(|x|t.contains(x)){match row.try_get::<i64,_>(i){Ok(v)=>Value::from(v),Err(_)=>Value::String(row.try_get::<String,_>(i).unwrap_or_default())}}
+        else if ["FLOAT","DOUBLE","DECIMAL","NUMERIC"].iter().any(|x|t.contains(x)){match row.try_get::<f64,_>(i){Ok(v)=>serde_json::Number::from_f64(v).map(Value::Number).unwrap_or(Value::Null),Err(_)=>Value::String(row.try_get::<String,_>(i).unwrap_or_default())}}
+        else if ["BLOB","BINARY","VARBINARY"].iter().any(|x|t.contains(x)){Value::String(hex::encode(row.try_get::<Vec<u8>,_>(i).unwrap_or_default()))}
+        else {Value::String(row.try_get::<String,_>(i).unwrap_or_default())}; object.insert(column.name().to_string(),value);
     }
     Ok(Value::Object(object))
 }
 
-async fn autorizar(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusCode, Json<ApiError>)> {
-    let token = headers.get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or_else(|| unauthorized("Sesión requerida."))?;
-    let mut sessions = state.sessions.write().await;
-    sessions.retain(|_, expires| *expires > Instant::now());
-    let Some(expires) = sessions.get_mut(token) else {
-        return Err(unauthorized("La sesión expiró. Inicie sesión nuevamente."));
-    };
-    *expires = Instant::now() + SESSION_TTL;
-    Ok(())
+fn token_headers(headers:&HeaderMap)->Result<String,(StatusCode,Json<ApiError>)>{
+    headers.get(header::AUTHORIZATION).and_then(|v|v.to_str().ok()).and_then(|v|v.strip_prefix("Bearer ")).map(str::to_string).ok_or_else(||unauthorized("Sesión requerida."))
 }
 
-async fn backup_status(
-    State(state): State<AppState>, headers: HeaderMap,
-) -> Result<Json<Vec<DatabaseStatus>>, (StatusCode, Json<ApiError>)> {
-    autorizar(&state, &headers).await?;
-    let nombre: String = sqlx::query_scalar("SELECT DATABASE()")
-        .fetch_one(&state.pool).await.map_err(internal)?;
-    let size: Option<i64> = sqlx::query_scalar(
-        "SELECT SUM(data_length + index_length) FROM information_schema.tables WHERE table_schema = DATABASE()",
-    ).fetch_one(&state.pool).await.map_err(internal)?;
-    Ok(Json(vec![DatabaseStatus {
-        name: nombre.clone(), path: format!("MariaDB: {nombre}"), exists: true,
-        size_bytes: size.unwrap_or(0).max(0) as u64, modified_unix: None,
-    }]))
+async fn autorizar(state:&AppState,headers:&HeaderMap)->Result<SessionInfo,(StatusCode,Json<ApiError>)>{
+    let token=token_headers(headers)?; let mut sessions=state.sessions.write().await; sessions.retain(|_,s|s.expires>Instant::now());
+    let s=sessions.get_mut(&token).ok_or_else(||unauthorized("La sesión expiró. Inicie sesión nuevamente."))?; s.expires=Instant::now()+SESSION_TTL; Ok(s.clone())
 }
 
-async fn backup_download(
-    State(state): State<AppState>, headers: HeaderMap,
-) -> Result<Response, (StatusCode, Json<ApiError>)> {
-    autorizar(&state, &headers).await?;
-    let cfg = DbCliConfig::from_url(&state.database_url).map_err(bad)?;
-    let output = Command::new("mariadb-dump").args(cfg.dump_args()).output().await
-        .map_err(|e| internal(format!("No fue posible ejecutar mariadb-dump: {e}")))?;
-    if !output.status.success() { return Err(internal(String::from_utf8_lossy(&output.stderr).to_string())); }
-    let filename = format!("HVDigital_MariaDB_{}.sql", chrono::Local::now().format("%Y%m%d-%H%M"));
-    let mut response = Response::new(Body::from(output.stdout));
-    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/sql"));
-    response.headers_mut().insert(header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")).unwrap());
-    Ok(response)
+async fn autorizar_admin(state:&AppState,headers:&HeaderMap)->Result<SessionInfo,(StatusCode,Json<ApiError>)>{let s=autorizar(state,headers).await?;if s.rol!="ADMIN"{return Err(forbidden("Se requieren permisos de administrador."));}Ok(s)}
+
+async fn auditoria(pool:&MySqlPool,usuario_id:u64,accion:&str,entidad:&str,entidad_id:Option<u64>,detalle:Option<Value>){
+    let _=sqlx::query("INSERT INTO auditoria_usuario(usuario_id,accion,entidad,entidad_id,detalle_json) VALUES(?,?,?,?,?)").bind(usuario_id).bind(accion).bind(entidad).bind(entidad_id).bind(detalle.map(|v|v.to_string())).execute(pool).await;
 }
 
-async fn backup_restore(
-    State(state): State<AppState>, headers: HeaderMap, mut multipart: Multipart,
-) -> Result<Json<Value>, (StatusCode, Json<ApiError>)> {
-    autorizar(&state, &headers).await?;
-    let mut sql_bytes: Option<Vec<u8>> = None;
-    while let Some(field) = multipart.next_field().await.map_err(|e| bad(e.to_string()))? {
-        if field.name() == Some("file") {
-            sql_bytes = Some(field.bytes().await.map_err(|e| bad(e.to_string()))?.to_vec());
-            break;
-        }
-    }
-    let sql_bytes = sql_bytes.ok_or_else(|| bad("Debe adjuntar un respaldo SQL de HVDigital."))?;
-    if sql_bytes.len() > 512 * 1024 * 1024 { return Err(bad("El respaldo supera el máximo permitido de 512 MB.")); }
-    let cfg = DbCliConfig::from_url(&state.database_url).map_err(bad)?;
-    let mut child = Command::new("mariadb").args(cfg.client_args())
-        .stdin(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn()
-        .map_err(|e| internal(format!("No fue posible ejecutar mariadb: {e}")))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        use tokio::io::AsyncWriteExt;
-        stdin.write_all(&sql_bytes).await.map_err(internal)?;
-    }
-    let output = child.wait_with_output().await.map_err(internal)?;
-    if !output.status.success() { return Err(internal(String::from_utf8_lossy(&output.stderr).to_string())); }
-    Ok(Json(serde_json::json!({
-        "sourcePath": "archivo subido desde navegador",
-        "safetyBackupPath": "administrado por MariaDB",
-        "restoredDatabases": [cfg.database],
-        "restoredUnix": chrono::Utc::now().timestamp()
-    })))
+fn limpio(v:Option<&str>)->Option<String>{v.map(str::trim).filter(|v|!v.is_empty()).map(str::to_string)}
+
+async fn backup_status(State(state):State<AppState>,headers:HeaderMap)->Result<Json<Vec<DatabaseStatus>>,(StatusCode,Json<ApiError>)>{
+    let _=autorizar_admin(&state,&headers).await?; let nombre:String=sqlx::query_scalar("SELECT DATABASE()").fetch_one(&state.pool).await.map_err(internal)?; let size:Option<i64>=sqlx::query_scalar("SELECT SUM(data_length+index_length) FROM information_schema.tables WHERE table_schema=DATABASE()").fetch_one(&state.pool).await.map_err(internal)?;
+    Ok(Json(vec![DatabaseStatus{name:nombre.clone(),path:format!("MariaDB: {nombre}"),exists:true,size_bytes:size.unwrap_or(0).max(0) as u64,modified_unix:None}]))
 }
 
-struct DbCliConfig { host: String, port: u16, user: String, password: String, database: String }
-impl DbCliConfig {
-    fn from_url(value: &str) -> Result<Self, String> {
-        let url = Url::parse(value).map_err(|e| format!("DATABASE_URL inválida: {e}"))?;
-        Ok(Self {
-            host: url.host_str().unwrap_or("127.0.0.1").to_string(),
-            port: url.port().unwrap_or(3306), user: url.username().to_string(),
-            password: url.password().unwrap_or("").to_string(), database: url.path().trim_start_matches('/').to_string(),
-        })
-    }
-    fn common_args(&self) -> Vec<String> {
-        vec![format!("--host={}", self.host), format!("--port={}", self.port),
-             format!("--user={}", self.user), format!("--password={}", self.password),
-             "--default-character-set=utf8mb4".to_string()]
-    }
-    fn dump_args(&self) -> Vec<String> {
-        let mut args = self.common_args();
-        args.extend(["--single-transaction".into(), "--routines".into(), "--triggers".into(),
-                     "--events".into(), "--hex-blob".into(), self.database.clone()]); args
-    }
-    fn client_args(&self) -> Vec<String> { let mut args = self.common_args(); args.push(self.database.clone()); args }
+async fn backup_download(State(state):State<AppState>,headers:HeaderMap)->Result<Response,(StatusCode,Json<ApiError>)>{
+    let _=autorizar_admin(&state,&headers).await?; let cfg=DbCliConfig::from_url(&state.database_url).map_err(bad)?; let output=Command::new("mariadb-dump").args(cfg.dump_args()).output().await.map_err(|e|internal(format!("No fue posible ejecutar mariadb-dump: {e}")))?; if !output.status.success(){return Err(internal(String::from_utf8_lossy(&output.stderr).to_string()));}
+    let filename=format!("HVDigital_MariaDB_{}.sql",chrono::Local::now().format("%Y%m%d-%H%M")); let mut response=Response::new(Body::from(output.stdout)); response.headers_mut().insert(header::CONTENT_TYPE,HeaderValue::from_static("application/sql")); response.headers_mut().insert(header::CONTENT_DISPOSITION,HeaderValue::from_str(&format!("attachment; filename=\"{filename}\"")).unwrap()); Ok(response)
 }
 
-fn bad<T: Into<String>>(message: T) -> (StatusCode, Json<ApiError>) {
-    (StatusCode::BAD_REQUEST, Json(ApiError { error: message.into() }))
+async fn backup_restore(State(state):State<AppState>,headers:HeaderMap,mut multipart:Multipart)->Result<Json<Value>,(StatusCode,Json<ApiError>)>{
+    let admin=autorizar_admin(&state,&headers).await?; let mut sql_bytes=None; while let Some(field)=multipart.next_field().await.map_err(|e|bad(e.to_string()))?{if field.name()==Some("file"){sql_bytes=Some(field.bytes().await.map_err(|e|bad(e.to_string()))?.to_vec());break;}}
+    let sql_bytes=sql_bytes.ok_or_else(||bad("Debe adjuntar un respaldo SQL de HVDigital."))?; if sql_bytes.len()>512*1024*1024{return Err(bad("El respaldo supera el máximo permitido de 512 MB."));}
+    let cfg=DbCliConfig::from_url(&state.database_url).map_err(bad)?; let mut child=Command::new("mariadb").args(cfg.client_args()).stdin(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().map_err(|e|internal(format!("No fue posible ejecutar mariadb: {e}")))?; if let Some(mut stdin)=child.stdin.take(){use tokio::io::AsyncWriteExt;stdin.write_all(&sql_bytes).await.map_err(internal)?;} let output=child.wait_with_output().await.map_err(internal)?; if !output.status.success(){return Err(internal(String::from_utf8_lossy(&output.stderr).to_string()));}
+    auditoria(&state.pool,admin.usuario_id,"RESTAURAR_RESPALDO","database",None,None).await; Ok(Json(serde_json::json!({"sourcePath":"archivo subido desde navegador","safetyBackupPath":"administrado por MariaDB","restoredDatabases":[cfg.database],"restoredUnix":chrono::Utc::now().timestamp()})))
 }
-fn unauthorized<T: Into<String>>(message: T) -> (StatusCode, Json<ApiError>) {
-    (StatusCode::UNAUTHORIZED, Json(ApiError { error: message.into() }))
+
+struct DbCliConfig{host:String,port:u16,user:String,password:String,database:String}
+impl DbCliConfig{
+    fn from_url(value:&str)->Result<Self,String>{let url=Url::parse(value).map_err(|e|format!("DATABASE_URL inválida: {e}"))?;Ok(Self{host:url.host_str().unwrap_or("127.0.0.1").to_string(),port:url.port().unwrap_or(3306),user:url.username().to_string(),password:url.password().unwrap_or("").to_string(),database:url.path().trim_start_matches('/').to_string()})}
+    fn common_args(&self)->Vec<String>{vec![format!("--host={}",self.host),format!("--port={}",self.port),format!("--user={}",self.user),format!("--password={}",self.password),"--default-character-set=utf8mb4".into()]}
+    fn dump_args(&self)->Vec<String>{let mut a=self.common_args();a.extend(["--single-transaction".into(),"--routines".into(),"--triggers".into(),"--events".into(),"--hex-blob".into(),self.database.clone()]);a}
+    fn client_args(&self)->Vec<String>{let mut a=self.common_args();a.push(self.database.clone());a}
 }
-fn internal<E: std::fmt::Display>(error: E) -> (StatusCode, Json<ApiError>) {
-    error!(%error, "Error interno HVDigital Web");
-    (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: error.to_string() }))
-}
+
+fn bad<T:Into<String>>(m:T)->(StatusCode,Json<ApiError>){(StatusCode::BAD_REQUEST,Json(ApiError{error:m.into()}))}
+fn unauthorized<T:Into<String>>(m:T)->(StatusCode,Json<ApiError>){(StatusCode::UNAUTHORIZED,Json(ApiError{error:m.into()}))}
+fn forbidden<T:Into<String>>(m:T)->(StatusCode,Json<ApiError>){(StatusCode::FORBIDDEN,Json(ApiError{error:m.into()}))}
+fn not_found<T:Into<String>>(m:T)->(StatusCode,Json<ApiError>){(StatusCode::NOT_FOUND,Json(ApiError{error:m.into()}))}
+fn internal<E:std::fmt::Display>(e:E)->(StatusCode,Json<ApiError>){error!(%e,"Error interno HVDigital Web");(StatusCode::INTERNAL_SERVER_ERROR,Json(ApiError{error:e.to_string()}))}
