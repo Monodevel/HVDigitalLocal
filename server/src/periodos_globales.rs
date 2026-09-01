@@ -258,7 +258,7 @@ async fn asegurar_espejos_usuario(
         )
         .bind(usuario_id)
         .bind(gid)
-        .fetch_optional(&mut **conn)
+        .fetch_optional(&mut *conn)
         .await
         .map_err(internal)?;
 
@@ -272,7 +272,7 @@ async fn asegurar_espejos_usuario(
             .bind(&fecha_termino)
             .bind(&estado)
             .bind(pid)
-            .execute(&mut **conn)
+            .execute(&mut *conn)
             .await
             .map_err(internal)?;
             pid
@@ -282,7 +282,7 @@ async fn asegurar_espejos_usuario(
             )
             .bind(usuario_id)
             .bind(anio)
-            .fetch_optional(&mut **conn)
+            .fetch_optional(&mut *conn)
             .await
             .map_err(internal)?;
 
@@ -296,7 +296,7 @@ async fn asegurar_espejos_usuario(
                 .bind(&fecha_termino)
                 .bind(&estado)
                 .bind(pid)
-                .execute(&mut **conn)
+                .execute(&mut *conn)
                 .await
                 .map_err(internal)?;
                 pid
@@ -310,7 +310,7 @@ async fn asegurar_espejos_usuario(
                 .bind(&fecha_termino)
                 .bind(&estado)
                 .bind(gid)
-                .execute(&mut **conn)
+                .execute(&mut *conn)
                 .await
                 .map_err(internal)?
                 .last_insert_id() as i64
@@ -322,7 +322,7 @@ async fn asegurar_espejos_usuario(
              FROM vigencias_periodo_global WHERE periodo_global_id=? ORDER BY orden"
         )
         .bind(gid)
-        .fetch_all(&mut **conn)
+        .fetch_all(&mut *conn)
         .await
         .map_err(internal)?;
 
@@ -339,7 +339,7 @@ async fn asegurar_espejos_usuario(
             .bind(vigencia.try_get::<String,_>("fecha_termino").map_err(internal)?)
             .bind(vigencia.try_get::<i64,_>("orden").map_err(internal)?)
             .bind(vigencia.try_get::<i64,_>("activo").map_err(internal)?)
-            .execute(&mut **conn)
+            .execute(&mut *conn)
             .await
             .map_err(internal)?;
         }
@@ -369,7 +369,7 @@ async fn sincronizar_estado_espejos(
         sqlx::query("UPDATE periodos SET estado=? WHERE id=?")
             .bind(estado)
             .bind(periodo_id)
-            .execute(&mut **conn)
+            .execute(&mut *conn)
             .await
             .map_err(internal)?;
     }
