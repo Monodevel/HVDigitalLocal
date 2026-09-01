@@ -7,6 +7,7 @@ import type {
 } from '../types/designaciones'
 
 import { obtenerBaseDatos } from './database'
+import { obtenerEstadoConfiguracionInicial } from './configuracionInicial'
 
 interface ResolucionPersona {
   persona_id: number
@@ -37,8 +38,36 @@ function nombreCompleto(
     .trim()
 }
 
+async function obtenerContextoPeriodoActivo(): Promise<{
+  periodoId: number
+  calificadorDirectoId: number
+}> {
+  const estado = await obtenerEstadoConfiguracionInicial()
+  const periodoId = Number(estado.periodo_activo_id ?? 0)
+  const calificadorDirectoId = Number(estado.calificador_directo_id ?? 0)
+
+  if (!periodoId) throw new Error('No existe un período activo seleccionado.')
+  if (!calificadorDirectoId) {
+    throw new Error('No existe un calificador directo configurado para esta cuenta.')
+  }
+
+  const db = await obtenerBaseDatos()
+  const periodos = await db.select<Array<{ id: number; estado: string | null }>>(
+    'SELECT id, estado FROM periodos WHERE id = $1 LIMIT 1',
+    [periodoId],
+  )
+  const periodo = periodos[0]
+  if (!periodo) throw new Error('El período activo no existe o no pertenece a esta cuenta.')
+  if (String(periodo.estado ?? '').trim().toUpperCase() === 'CERRADO') {
+    throw new Error('El período seleccionado está cerrado y no permite agregar personal.')
+  }
+
+  return { periodoId, calificadorDirectoId }
+}
+
 export async function listarPersonasDisponibles(): Promise<PersonaDisponible[]> {
   const db = await obtenerBaseDatos()
+  const { periodoId } = await obtenerContextoPeriodoActivo()
 
   const filas = await db.select<Array<{
     id: number
@@ -57,12 +86,12 @@ export async function listarPersonasDisponibles(): Promise<PersonaDisponible[]> 
       AND NOT EXISTS (
         SELECT 1
         FROM designaciones_calificacion d
-        INNER JOIN configuracion_inicial ci
-          ON ci.periodo_activo_id = d.periodo_id AND ci.id = 1
-        WHERE d.persona_id = p.id AND d.estado <> 'ANULADA'
+        WHERE d.persona_id = p.id
+          AND d.periodo_id = $1
+          AND d.estado <> 'ANULADA'
       )
     ORDER BY p.apellido_paterno, p.apellido_materno, p.nombres
-  `)
+  `, [periodoId])
 
   return filas.map(fila => {
     const completo = nombreCompleto(
@@ -100,6 +129,7 @@ export async function crearPersonaCalificada(
     throw new Error('Debe seleccionar la calidad de personal.')
   }
 
+  await obtenerContextoPeriodoActivo()
   const db = await obtenerBaseDatos()
 
   const existente = await db.select<Array<{ id: number }>>(
@@ -136,6 +166,7 @@ export async function crearPersonaCalificada(
 
 async function resolverPersona(personaId: number): Promise<ResolucionPersona> {
   const db = await obtenerBaseDatos()
+  const { periodoId, calificadorDirectoId } = await obtenerContextoPeriodoActivo()
 
   const filas = await db.select<Array<{
     persona_id: number
@@ -143,33 +174,24 @@ async function resolverPersona(personaId: number): Promise<ResolucionPersona> {
     calidad_personal_id: number | null
     categoria_id: number | null
     categoria_codigo: string | null
-    periodo_id: number | null
-    calificador_directo_id: number | null
   }>>(`
     SELECT
       p.id AS persona_id,
       p.grado_id,
       p.calidad_personal_id,
       COALESCE(g.categoria_id, cp.categoria_id) AS categoria_id,
-      c.codigo AS categoria_codigo,
-      ci.periodo_activo_id AS periodo_id,
-      ci.calificador_directo_id
+      c.codigo AS categoria_codigo
     FROM personas p
     LEFT JOIN grados g ON g.id = p.grado_id
     LEFT JOIN calidades_personal cp ON cp.id = p.calidad_personal_id
     LEFT JOIN categorias_personal c
       ON c.id = COALESCE(g.categoria_id, cp.categoria_id)
-    CROSS JOIN configuracion_inicial ci
-    WHERE p.id = $1 AND p.activo = 1 AND ci.id = 1
+    WHERE p.id = $1 AND p.activo = 1
     LIMIT 1
   `, [personaId])
 
   const persona = filas[0]
   if (!persona) throw new Error('La persona seleccionada no existe.')
-  if (!persona.periodo_id) throw new Error('No existe un período activo.')
-  if (!persona.calificador_directo_id) {
-    throw new Error('No existe un calificador directo configurado.')
-  }
   if (!persona.categoria_id || !persona.categoria_codigo) {
     throw new Error('No fue posible determinar la categoría de la persona.')
   }
@@ -192,11 +214,11 @@ async function resolverPersona(personaId: number): Promise<ResolucionPersona> {
       AND codigo_regimen = $2
       AND activo = 1
     LIMIT 1
-  `, [persona.periodo_id, codigoRegimen])
+  `, [periodoId, codigoRegimen])
 
   const vigencia = vigencias[0]
   if (!vigencia) {
-    throw new Error(`No existe una vigencia para ${codigoRegimen}.`)
+    throw new Error(`No existe una vigencia para ${codigoRegimen} en el período seleccionado.`)
   }
 
   return {
@@ -207,8 +229,8 @@ async function resolverPersona(personaId: number): Promise<ResolucionPersona> {
     vigencia_periodo_id: vigencia.id,
     fecha_inicio: vigencia.fecha_inicio,
     fecha_termino: vigencia.fecha_termino,
-    periodo_id: persona.periodo_id,
-    calificador_directo_id: persona.calificador_directo_id,
+    periodo_id: periodoId,
+    calificador_directo_id: calificadorDirectoId,
   }
 }
 
@@ -276,12 +298,7 @@ export async function designarPersona(
       periodo_id = excluded.periodo_id,
       categoria_id = excluded.categoria_id,
       actualizado_en = CURRENT_TIMESTAMP
-  `, [
-    designacionId,
-    persona.persona_id,
-    persona.periodo_id,
-    persona.categoria_id,
-  ])
+  `, [designacionId, persona.persona_id, persona.periodo_id, persona.categoria_id])
 
   const expedientes = await db.select<Array<{ id: number }>>(
     'SELECT id FROM expedientes_calificacion WHERE designacion_id = $1 LIMIT 1',
@@ -291,13 +308,8 @@ export async function designarPersona(
   if (!expedienteId) throw new Error('No fue posible obtener el expediente.')
 
   const instrumentos = [
-    ['HOJA_VIDA', 1],
-    ['HC1', 1],
-    ['HC2', 1],
-    ['EVINT', 1],
-    ['EVINT', 2],
-    ['HAM', 1],
-    ['HAPSEM', 1],
+    ['HOJA_VIDA', 1], ['HC1', 1], ['HC2', 1], ['EVINT', 1],
+    ['EVINT', 2], ['HAM', 1], ['HAPSEM', 1],
   ] as const
 
   for (const [tipo, numero] of instrumentos) {
@@ -369,15 +381,6 @@ export async function designarPersona(
     WHERE id = $1
   `, [instrumentoHojaVidaId])
 
-  await db.execute(`
-    UPDATE configuracion_inicial
-    SET estado = 'OPERATIVA',
-        paso_actual = 5,
-        completada_en = COALESCE(completada_en, CURRENT_TIMESTAMP),
-        actualizado_en = CURRENT_TIMESTAMP
-    WHERE id = 1
-  `)
-
   const total = await db.select<Array<{ total: number }>>(
     'SELECT COUNT(*) AS total FROM instrumentos_expediente WHERE expediente_id = $1',
     [expedienteId],
@@ -394,10 +397,12 @@ export async function designarPersona(
 
 export async function listarDesignacionesPeriodoActivo(): Promise<DesignacionPeriodoActivo[]> {
   const db = await obtenerBaseDatos()
+  const { periodoId } = await obtenerContextoPeriodoActivo()
   const filas = await db.select<DesignacionPeriodoActivo[]>(`
     SELECT * FROM vw_designaciones_periodo_activo
+    WHERE periodo_id = $1
     ORDER BY apellido_paterno, apellido_materno, nombres
-  `)
+  `, [periodoId])
 
   return filas.map(fila => ({
     ...fila,
