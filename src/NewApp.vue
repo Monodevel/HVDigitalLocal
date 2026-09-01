@@ -24,6 +24,7 @@ import HapsemView from './views/Hapsem/HapsemView.vue'
 import ResolucionesView from './views/Resoluciones/ResolucionesView.vue'
 import ResolucionFormularioView from './views/Resoluciones/ResolucionFormularioView.vue'
 import UsuariosView from './views/Administracion/UsuariosView.vue'
+import PerfilUsuarioView from './views/Perfil/PerfilUsuarioView.vue'
 
 import { obtenerEstadoConfiguracionInicial } from './services/configuracionInicial'
 import { listarCalificadosUi, listarPeriodosUi, seleccionarPeriodoUi, type CalificadoUi, type PeriodoUi } from './services/nuevaInterfaz'
@@ -37,14 +38,14 @@ type Pantalla =
   | 'CARGANDO' | 'LOGIN' | 'CONFIGURACION_INICIAL' | 'PERIODOS'
   | 'CALIFICADOS' | 'DESIGNACION' | 'EXPEDIENTE' | 'HOJA_VIDA' | 'ANOTACION'
   | 'EVINT' | 'HC1' | 'HC2' | 'HAM' | 'HAPSEM' | 'RESOLUCIONES'
-  | 'RESOLUCION_FORMULARIO' | 'CONFIGURACION' | 'ADMIN_USUARIOS'
+  | 'RESOLUCION_FORMULARIO' | 'CONFIGURACION' | 'ADMIN_USUARIOS' | 'PERFIL'
 
 interface ResultadoLoginLocal {
   autenticado: boolean; usuario: string; mensaje: string; usuarioId?: number; rol?: RolUsuario
   calificadorDirectoId?: number | null; nombreMostrar?: string | null
 }
 
-const versionAplicacion = '0.3.0'
+const versionAplicacion = '0.4.0'
 const pantalla = ref<Pantalla>('CARGANDO')
 const usuario = ref('')
 const nombreUsuario = ref('')
@@ -75,6 +76,10 @@ const hojaVidaSeleccionadaId = computed(() => calificadoSeleccionado.value?.hoja
 const opcionesGrado = computed(() => [...new Set(calificados.value.map(item => item.grado))].sort())
 const opcionesUnidad = computed(() => [...new Set(calificados.value.map(item => item.unidad))].sort())
 const esAdmin = computed(() => rolUsuario.value === 'ADMIN')
+const inicialesUsuario = computed(() => {
+  const base = (nombreUsuario.value || usuario.value).trim().split(/\s+/).filter(Boolean)
+  return (base.length > 1 ? `${base[0][0]}${base[base.length - 1][0]}` : base[0]?.slice(0, 2) || 'HV').toUpperCase()
+})
 const calificadosFiltrados = computed(() => {
   const q = textoBusqueda.value.trim().toLocaleLowerCase('es')
   return calificados.value.filter(item => {
@@ -93,12 +98,11 @@ const menuItems = computed(() => {
     { id: 'ham', label: 'HAM', icon: 'pi pi-star' }, { id: 'hapsem', label: 'HAPSEM', icon: 'pi pi-heart' },
     { id: 'resoluciones', label: 'Resoluciones', icon: 'pi pi-file' },
   ]
-  const items = [
-    { id: 'hojas-vida', label: 'Hojas de Vida', icon: 'pi pi-book' }, { id: 'designacion', label: 'Agregar personal', icon: 'pi pi-user-plus' },
-    { id: 'periodos', label: 'Períodos', icon: 'pi pi-calendar' }, { id: 'configuracion', label: 'Configuración', icon: 'pi pi-cog' },
+  return [
+    { id: 'hojas-vida', label: 'Hojas de Vida', icon: 'pi pi-book' },
+    { id: 'designacion', label: 'Agregar personal', icon: 'pi pi-user-plus' },
+    { id: 'periodos', label: 'Períodos', icon: 'pi pi-calendar' },
   ]
-  if (esAdmin.value) items.push({ id: 'admin-usuarios', label: 'Usuarios', icon: 'pi pi-users' })
-  return items
 })
 
 async function cargarContextoAutenticado(periodoActivoId?: number | null): Promise<void> {
@@ -148,14 +152,9 @@ async function recargarPeriodos(): Promise<void> {
   try {
     const seleccionGlobalId = periodoSeleccionado.value?.globalId ?? null
     periodos.value = await listarPeriodosUi()
-    if (seleccionGlobalId) {
-      periodoSeleccionado.value = periodos.value.find(p => p.globalId === seleccionGlobalId) ?? null
-    }
-  } catch (e) {
-    errorCarga.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    cargandoDatos.value = false
-  }
+    if (seleccionGlobalId) periodoSeleccionado.value = periodos.value.find(p => p.globalId === seleccionGlobalId) ?? null
+  } catch (e) { errorCarga.value = e instanceof Error ? e.message : String(e) }
+  finally { cargandoDatos.value = false }
 }
 
 async function crearPeriodoGlobal(): Promise<void> {
@@ -165,17 +164,10 @@ async function crearPeriodoGlobal(): Promise<void> {
   if (entrada == null) return
   const anio = Number.parseInt(entrada.trim(), 10)
   if (!Number.isInteger(anio)) return window.alert('Ingrese un año válido.')
-
-  administrandoPeriodo.value = true
-  errorCarga.value = ''
-  try {
-    await crearPeriodoAdmin(anio)
-    await recargarPeriodos()
-  } catch (e) {
-    errorCarga.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    administrandoPeriodo.value = false
-  }
+  administrandoPeriodo.value = true; errorCarga.value = ''
+  try { await crearPeriodoAdmin(anio); await recargarPeriodos() }
+  catch (e) { errorCarga.value = e instanceof Error ? e.message : String(e) }
+  finally { administrandoPeriodo.value = false }
 }
 
 async function cambiarEstadoGlobal(periodo: PeriodoUi): Promise<void> {
@@ -183,17 +175,10 @@ async function cambiarEstadoGlobal(periodo: PeriodoUi): Promise<void> {
   const nuevoEstado = periodo.estado === 'ABIERTO' ? 'CERRADO' : 'ABIERTO'
   const verbo = nuevoEstado === 'ABIERTO' ? 'abrir' : 'cerrar'
   if (!window.confirm(`¿Confirma ${verbo} el período ${periodo.nombre} para todos los calificadores?`)) return
-
-  administrandoPeriodo.value = true
-  errorCarga.value = ''
-  try {
-    await cambiarEstadoPeriodoAdmin(periodo.globalId, nuevoEstado)
-    await recargarPeriodos()
-  } catch (e) {
-    errorCarga.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    administrandoPeriodo.value = false
-  }
+  administrandoPeriodo.value = true; errorCarga.value = ''
+  try { await cambiarEstadoPeriodoAdmin(periodo.globalId, nuevoEstado); await recargarPeriodos() }
+  catch (e) { errorCarga.value = e instanceof Error ? e.message : String(e) }
+  finally { administrandoPeriodo.value = false }
 }
 
 async function seleccionarPeriodo(periodo: PeriodoUi): Promise<void> {
@@ -221,6 +206,7 @@ async function manejarMenu(id: string): Promise<void> {
   if (id === 'volver' || id === 'hojas-vida') { if (periodoSeleccionado.value) pantalla.value = 'CALIFICADOS'; else pantalla.value = 'PERIODOS'; menuActivo.value = periodoSeleccionado.value ? 'hojas-vida' : 'periodos' }
   else if (id === 'periodos') { await recargarPeriodos(); pantalla.value = 'PERIODOS' }
   else if (id === 'configuracion') pantalla.value = 'CONFIGURACION'
+  else if (id === 'perfil') pantalla.value = 'PERFIL'
   else if (id === 'admin-usuarios' && esAdmin.value) pantalla.value = 'ADMIN_USUARIOS'
   else if (id === 'designacion') { if (!periodoSeleccionado.value) return window.alert('Seleccione primero un período.'); if (modoSoloLectura.value) return window.alert('No se puede agregar personal a un período cerrado.'); pantalla.value = 'DESIGNACION' }
   else if (id === 'resumen') pantalla.value = 'EXPEDIENTE'
@@ -234,55 +220,66 @@ onMounted(() => void inicializarAplicacion())
 
 <template>
   <div v-if="pantalla === 'CARGANDO'" class="hv-centered-page"><i class="pi pi-spin pi-spinner hv-loading-icon" /><strong>Iniciando HVDigital</strong><span>Restaurando su espacio de trabajo…</span></div>
+
   <main v-else-if="pantalla === 'LOGIN'" class="hv-login-page">
-    <section class="hv-login-brand-panel"><div class="hv-login-emblem"><span>HV</span></div><h1>HVDigital</h1><p>Administración personal de Hojas de Vida.</p><small>Acceso individual · Información privada por calificador</small></section>
-    <section class="hv-login-form-panel"><div class="hv-login-form-wrapper"><div class="hv-login-heading"><span class="hv-eyebrow">Acceso</span><h2>Iniciar sesión</h2><p>Ingrese sus credenciales personales.</p></div><div class="hv-form-stack"><label for="usuario">Usuario</label><InputText id="usuario" v-model="usuario" autocomplete="username" fluid :disabled="autenticando" /><label for="contrasena">Contraseña</label><Password input-id="contrasena" v-model="contrasena" :feedback="false" toggle-mask fluid :disabled="autenticando" @keyup.enter="iniciarSesion" /><label class="hv-checkbox-label"><input v-model="recordarSesion" type="checkbox" :disabled="autenticando"><span>Recordar usuario</span></label><small v-if="errorLogin" class="hv-error">{{ errorLogin }}</small><Button label="Iniciar sesión" icon="pi pi-sign-in" fluid :loading="autenticando" @click="iniciarSesion" /></div></div></section>
-    <footer class="hv-global-statusbar"><span><i :class="baseDatosConectada ? 'hv-status-online' : 'hv-status-offline'" /> {{ baseDatosConectada ? 'Servidor disponible' : 'Servidor sin conexión' }}</span><span>Sesión individual</span><span>Versión {{ versionAplicacion }}</span></footer>
+    <section class="hv-login-brand-panel">
+      <div class="hv-login-brand-content">
+        <div class="hv-login-brand-top"><div class="hv-login-emblem"><span>HV</span></div><div class="hv-login-product"><strong>HVDigital</strong><small>Gestión personal de Hojas de Vida</small></div></div>
+        <h1>Su espacio de trabajo, ordenado y seguro.</h1>
+        <p>Administre Hojas de Vida, instrumentos y períodos desde una interfaz diseñada para trabajo diario.</p>
+        <div class="hv-login-feature-list">
+          <div class="hv-login-feature"><i class="pi pi-lock" /><span>Acceso individual y datos aislados por usuario</span></div>
+          <div class="hv-login-feature"><i class="pi pi-book" /><span>Hojas de Vida e instrumentos en un solo lugar</span></div>
+          <div class="hv-login-feature"><i class="pi pi-history" /><span>Trazabilidad y respaldo de la información</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="hv-login-form-panel">
+      <div class="hv-login-form-wrapper">
+        <div class="hv-login-heading"><span class="hv-eyebrow">Acceso seguro</span><h2>Bienvenido</h2><p>Ingrese con la cuenta asignada para continuar a su espacio de trabajo.</p></div>
+        <div class="hv-form-stack">
+          <div class="hv-login-field"><label for="usuario">Usuario</label><div class="hv-login-input-wrap"><i class="pi pi-user" /><InputText id="usuario" v-model="usuario" autocomplete="username" fluid :disabled="autenticando" placeholder="Ingrese su usuario" /></div></div>
+          <div class="hv-login-field"><label for="contrasena">Contraseña</label><div class="hv-login-input-wrap"><i class="pi pi-key" /><Password input-id="contrasena" v-model="contrasena" :feedback="false" toggle-mask fluid :disabled="autenticando" placeholder="Ingrese su contraseña" @keyup.enter="iniciarSesion" /></div></div>
+          <div class="hv-login-options"><label class="hv-checkbox-label"><input v-model="recordarSesion" type="checkbox" :disabled="autenticando"><span>Recordar usuario</span></label><span class="hv-status-group"><i :class="baseDatosConectada ? 'hv-status-online' : 'hv-status-offline'" /> {{ baseDatosConectada ? 'Servidor disponible' : 'Sin conexión' }}</span></div>
+          <div v-if="errorLogin" class="hv-profile-feedback is-error"><i class="pi pi-exclamation-circle" /><span>{{ errorLogin }}</span></div>
+          <Button class="hv-login-submit" label="Ingresar a HVDigital" icon="pi pi-arrow-right" icon-pos="right" fluid :loading="autenticando" @click="iniciarSesion" />
+          <div class="hv-login-security-note"><i class="pi pi-shield" /><span>La sesión se mantiene únicamente en este navegador y se invalida al cerrar sesión.</span></div>
+        </div>
+      </div>
+    </section>
+    <footer class="hv-global-statusbar"><span>HVDigital Server</span><span>Acceso privado por calificador</span><span>Versión {{ versionAplicacion }}</span></footer>
   </main>
 
   <ConfiguracionInicialView v-else-if="pantalla === 'CONFIGURACION_INICIAL'" />
 
   <div v-else class="hv-app-shell hv-app-shell-with-status">
     <aside class="hv-sidebar">
-      <div class="hv-sidebar-brand"><div class="hv-brand-mark hv-brand-mark-small">HV</div><div><strong>HVDigital</strong><small>{{ dentroExpediente ? 'Hoja de Vida' : 'Mi espacio' }}</small></div></div>
-      <nav class="hv-sidebar-menu"><button v-for="item in menuItems" :key="item.id" type="button" :class="['hv-sidebar-item',{ 'hv-sidebar-item-active': menuActivo === item.id }]" @click="manejarMenu(item.id)"><i :class="item.icon" /><span>{{ item.label }}</span></button></nav>
-      <div class="hv-sidebar-context"><small>{{ rolUsuario === 'ADMIN' ? 'Administrador' : 'Calificador' }}</small><strong>{{ nombreUsuario || usuario }}</strong><button type="button" class="hv-sidebar-logout" @click="cerrarSesion"><i class="pi pi-sign-out" /> Cerrar sesión</button></div>
+      <div class="hv-sidebar-brand"><div class="hv-brand-mark hv-brand-mark-small">HV</div><div><strong>HVDigital</strong><small>{{ dentroExpediente ? 'Expediente' : 'Mi espacio' }}</small></div></div>
+      <nav class="hv-sidebar-menu">
+        <div class="hv-sidebar-menu-section">{{ dentroExpediente ? 'Expediente' : 'Mi espacio' }}</div>
+        <button v-for="item in menuItems" :key="item.id" type="button" :class="['hv-sidebar-item',{ 'hv-sidebar-item-active': menuActivo === item.id }]" @click="manejarMenu(item.id)"><i :class="item.icon" /><span>{{ item.label }}</span></button>
+        <template v-if="!dentroExpediente && esAdmin"><div class="hv-sidebar-menu-section">Administración</div><button type="button" :class="['hv-sidebar-item',{ 'hv-sidebar-item-active': menuActivo === 'admin-usuarios' }]" @click="manejarMenu('admin-usuarios')"><i class="pi pi-users" /><span>Usuarios y accesos</span></button></template>
+        <template v-if="!dentroExpediente"><div class="hv-sidebar-menu-section">Sistema</div><button type="button" :class="['hv-sidebar-item',{ 'hv-sidebar-item-active': menuActivo === 'configuracion' }]" @click="manejarMenu('configuracion')"><i class="pi pi-cog" /><span>Configuración</span></button></template>
+      </nav>
+      <div class="hv-sidebar-context">
+        <button type="button" class="hv-sidebar-profile-button" @click="manejarMenu('perfil')"><span class="hv-user-avatar">{{ inicialesUsuario }}</span><span class="hv-sidebar-profile-copy"><strong>{{ nombreUsuario || usuario }}</strong><small>{{ rolUsuario === 'ADMIN' ? 'Administrador' : 'Calificador' }} · Mi perfil</small></span><i class="pi pi-chevron-right" /></button>
+        <button type="button" class="hv-sidebar-logout" @click="cerrarSesion"><i class="pi pi-sign-out" /> Cerrar sesión</button>
+      </div>
     </aside>
 
     <section class="hv-workspace">
-      <header class="hv-topbar"><div><strong>{{ dentroExpediente ? calificadoSeleccionado?.nombre : pantalla === 'ADMIN_USUARIOS' ? 'Usuarios' : pantalla === 'CONFIGURACION' ? 'Configuración' : pantalla === 'PERIODOS' ? 'Períodos' : 'Hojas de Vida' }}</strong><small>{{ periodoSeleccionado?.nombre ?? 'Seleccione un período de trabajo' }}</small></div><div class="hv-topbar-actions"><Tag v-if="esAdmin" value="ADMIN" severity="info" /><Tag v-if="modoSoloLectura" value="Solo lectura" severity="warn" /></div></header>
+      <header class="hv-topbar"><div><strong>{{ dentroExpediente ? calificadoSeleccionado?.nombre : pantalla === 'PERFIL' ? 'Mi perfil' : pantalla === 'ADMIN_USUARIOS' ? 'Usuarios y accesos' : pantalla === 'CONFIGURACION' ? 'Configuración' : pantalla === 'PERIODOS' ? 'Períodos' : 'Hojas de Vida' }}</strong><small>{{ pantalla === 'PERFIL' ? 'Cuenta, datos personales y seguridad' : periodoSeleccionado?.nombre ?? 'Seleccione un período de trabajo' }}</small></div><div class="hv-topbar-actions"><Tag v-if="esAdmin" value="ADMIN" severity="info" /><Tag v-if="modoSoloLectura && pantalla !== 'PERFIL'" value="Solo lectura" severity="warn" /></div></header>
 
       <div v-if="pantalla === 'PERIODOS'" class="hv-content hv-periods-workspace">
-        <header class="hv-page-heading hv-page-heading-compact">
-          <div><span class="hv-eyebrow">{{ esAdmin ? 'Administración global' : 'Mi espacio de trabajo' }}</span><h1>Períodos</h1><p>{{ esAdmin ? 'Cree, abra o cierre los períodos disponibles para todos los calificadores.' : 'Seleccione uno de los períodos publicados por el administrador.' }}</p></div>
-          <div class="hv-period-admin-actions">
-            <Button v-if="esAdmin" label="Crear período" icon="pi pi-plus" :loading="administrandoPeriodo" @click="crearPeriodoGlobal" />
-            <Button icon="pi pi-refresh" severity="secondary" outlined aria-label="Actualizar períodos" :loading="cargandoDatos" @click="recargarPeriodos" />
-          </div>
-        </header>
+        <header class="hv-page-heading hv-page-heading-compact"><div><span class="hv-eyebrow">{{ esAdmin ? 'Administración global' : 'Mi espacio de trabajo' }}</span><h1>Períodos</h1><p>{{ esAdmin ? 'Cree, abra o cierre los períodos disponibles para todos los calificadores.' : 'Seleccione uno de los períodos publicados por el administrador.' }}</p></div><div class="hv-period-admin-actions"><Button v-if="esAdmin" label="Crear período" icon="pi pi-plus" :loading="administrandoPeriodo" @click="crearPeriodoGlobal" /><Button icon="pi pi-refresh" severity="secondary" outlined aria-label="Actualizar períodos" :loading="cargandoDatos" @click="recargarPeriodos" /></div></header>
         <small v-if="errorCarga" class="hv-error">{{ errorCarga }}</small>
-        <section class="hv-period-list">
-          <Card v-for="periodo in periodos" :key="periodo.id" :class="['hv-period-row',{ 'hv-period-row-active': periodoSeleccionado?.id === periodo.id }]">
-            <template #content>
-              <div class="hv-period-row-content">
-                <div>
-                  <div class="hv-period-title-line"><strong>{{ periodo.nombre }}</strong><Tag v-if="periodoSeleccionado?.id === periodo.id" value="En uso" severity="info" /><Tag :value="periodo.estado === 'ABIERTO' ? 'Abierto' : 'Cerrado'" :severity="periodo.estado === 'ABIERTO' ? 'success' : 'secondary'" /></div>
-                  <small>{{ periodo.fechaInicio }} — {{ periodo.fechaTermino }}</small>
-                  <p>{{ periodo.estado === 'ABIERTO' ? 'Disponible para administrar Hojas de Vida.' : 'Disponible únicamente en modo de consulta.' }}</p>
-                </div>
-                <div class="hv-period-admin-actions">
-                  <Button v-if="esAdmin" :label="periodo.estado === 'ABIERTO' ? 'Cerrar' : 'Abrir'" :icon="periodo.estado === 'ABIERTO' ? 'pi pi-lock' : 'pi pi-lock-open'" :severity="periodo.estado === 'ABIERTO' ? 'secondary' : 'success'" outlined :loading="administrandoPeriodo" @click="cambiarEstadoGlobal(periodo)" />
-                  <Button :label="periodoSeleccionado?.id === periodo.id ? 'Continuar' : periodo.estado === 'ABIERTO' ? 'Seleccionar' : 'Consultar'" :icon="periodoSeleccionado?.id === periodo.id ? 'pi pi-arrow-right' : periodo.estado === 'ABIERTO' ? 'pi pi-check-circle' : 'pi pi-eye'" :loading="cargandoDatos" @click="seleccionarPeriodo(periodo)" />
-                </div>
-              </div>
-            </template>
-          </Card>
-        </section>
+        <section class="hv-period-list"><Card v-for="periodo in periodos" :key="periodo.id" :class="['hv-period-row',{ 'hv-period-row-active': periodoSeleccionado?.id === periodo.id }]"><template #content><div class="hv-period-row-content"><div><div class="hv-period-title-line"><strong>{{ periodo.nombre }}</strong><Tag v-if="periodoSeleccionado?.id === periodo.id" value="En uso" severity="info" /><Tag :value="periodo.estado === 'ABIERTO' ? 'Abierto' : 'Cerrado'" :severity="periodo.estado === 'ABIERTO' ? 'success' : 'secondary'" /></div><small>{{ periodo.fechaInicio }} — {{ periodo.fechaTermino }}</small><p>{{ periodo.estado === 'ABIERTO' ? 'Disponible para administrar Hojas de Vida.' : 'Disponible únicamente en modo de consulta.' }}</p></div><div class="hv-period-admin-actions"><Button v-if="esAdmin" :label="periodo.estado === 'ABIERTO' ? 'Cerrar' : 'Abrir'" :icon="periodo.estado === 'ABIERTO' ? 'pi pi-lock' : 'pi pi-lock-open'" :severity="periodo.estado === 'ABIERTO' ? 'secondary' : 'success'" outlined :loading="administrandoPeriodo" @click="cambiarEstadoGlobal(periodo)" /><Button :label="periodoSeleccionado?.id === periodo.id ? 'Continuar' : periodo.estado === 'ABIERTO' ? 'Seleccionar' : 'Consultar'" :icon="periodoSeleccionado?.id === periodo.id ? 'pi pi-arrow-right' : periodo.estado === 'ABIERTO' ? 'pi pi-check-circle' : 'pi pi-eye'" :loading="cargandoDatos" @click="seleccionarPeriodo(periodo)" /></div></div></template></Card></section>
         <Card v-if="!periodos.length && !cargandoDatos" class="hv-empty-card"><template #content><div class="hv-empty-state"><i class="pi pi-calendar" /><strong>No hay períodos publicados</strong><span>{{ esAdmin ? 'Cree el primer período para habilitar el trabajo de los calificadores.' : 'El administrador aún no ha publicado períodos.' }}</span></div></template></Card>
       </div>
 
       <div v-else-if="pantalla === 'CALIFICADOS'" class="hv-content"><header class="hv-page-heading hv-page-heading-compact"><div><span class="hv-eyebrow">{{ periodoSeleccionado?.nombre }}</span><h1>Hojas de Vida administradas</h1><p>Personal que mantiene bajo su control en este período.</p></div><Button label="Agregar personal" icon="pi pi-user-plus" :disabled="modoSoloLectura" @click="manejarMenu('designacion')" /></header><section class="hv-filter-bar"><span class="hv-search-control"><i class="pi pi-search" /><InputText v-model="textoBusqueda" placeholder="Buscar por nombre o RUN…" fluid /></span><Select v-model="filtroGrado" :options="opcionesGrado" placeholder="Todos los grados" show-clear /><Select v-model="filtroUnidad" :options="opcionesUnidad" placeholder="Todas las unidades" show-clear /><Button label="Limpiar" icon="pi pi-filter-slash" severity="secondary" outlined @click="limpiarFiltros" /><Button icon="pi pi-refresh" severity="secondary" outlined :loading="cargandoDatos" aria-label="Actualizar" @click="recargarCalificados" /></section><Card class="hv-table-card"><template #content><DataTable :value="calificadosFiltrados" paginator :rows="10" striped-rows responsive-layout="scroll" :loading="cargandoDatos" empty-message="No existen Hojas de Vida administradas en este período."><Column field="grado" header="Grado" sortable /><Column field="nombre" header="Nombre completo" sortable /><Column field="run" header="RUN" /><Column field="unidad" header="Unidad" sortable /><Column field="estado" header="Estado"><template #body="{ data }"><Tag :value="data.estado" :severity="data.estado === 'ACTIVO' ? 'success' : 'secondary'" /></template></Column><Column header=""><template #body="{ data }"><Button label="Abrir" icon="pi pi-folder-open" size="small" @click="abrirExpediente(data)" /></template></Column></DataTable></template></Card></div>
 
+      <div v-else-if="pantalla === 'PERFIL'" class="hv-module-host"><PerfilUsuarioView /></div>
       <div v-else-if="pantalla === 'DESIGNACION'" class="hv-module-host"><DesignacionCalificadosView /></div>
       <div v-else-if="pantalla === 'EXPEDIENTE' && expedienteSeleccionadoId" class="hv-module-host"><ExpedienteDetalleView :expediente-id="expedienteSeleccionadoId" @volver="pantalla='CALIFICADOS'" @abrir-instrumento="abrirInstrumento" @abrir-evint="id => { instrumentoEvintSeleccionadoId=id; pantalla='EVINT' }" @abrir-hoja-vida="abrirHojaVida" @nueva-anotacion="abrirAnotacion" /></div>
       <div v-else-if="pantalla === 'HOJA_VIDA' && hojaVidaSeleccionadaId" class="hv-module-host"><HojaVidaView :hoja-vida-id="hojaVidaSeleccionadaId" @volver="pantalla='EXPEDIENTE'" @nueva-anotacion="abrirAnotacion" /></div>
