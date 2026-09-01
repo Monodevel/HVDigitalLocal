@@ -1,11 +1,9 @@
 import { obtenerBaseDatos } from './database'
+import { apiJson } from '../web/api'
 
 export type SerieResolucion = '1530' | '6060'
 
-export const SERIES_RESOLUCION: Array<{
-  value: SerieResolucion
-  label: string
-}> = [
+export const SERIES_RESOLUCION: Array<{ value: SerieResolucion; label: string }> = [
   { value: '1530', label: '1530' },
   { value: '6060', label: '6060' },
 ]
@@ -16,44 +14,12 @@ function validarSerie(valor: string): asserts valor is SerieResolucion {
   }
 }
 
-/**
- * En la edición web el esquema de series se administra desde las migraciones
- * MariaDB del backend. Esta función solo garantiza los registros base y no
- * intenta crear tablas, índices ni triggers desde el navegador.
- */
-export async function asegurarSeriesResoluciones(): Promise<void> {
-  const db = await obtenerBaseDatos()
-
-  await db.execute(`
-    INSERT INTO configuracion_series_resolucion (id, prefijo)
-    VALUES (1, '1530')
-    ON CONFLICT(id) DO NOTHING
-  `)
-
-  await db.execute(`
-    INSERT INTO contadores_resolucion (prefijo, ultimo_correlativo)
-    VALUES ('1530', 0)
-    ON CONFLICT(prefijo) DO NOTHING
-  `)
-
-  await db.execute(`
-    INSERT INTO contadores_resolucion (prefijo, ultimo_correlativo)
-    VALUES ('6060', 0)
-    ON CONFLICT(prefijo) DO NOTHING
-  `)
-}
+/** El esquema es responsabilidad exclusiva del backend MariaDB. */
+export async function asegurarSeriesResoluciones(): Promise<void> {}
 
 export async function obtenerSerieResolucionActual(): Promise<SerieResolucion> {
-  await asegurarSeriesResoluciones()
-  const db = await obtenerBaseDatos()
-  const filas = await db.select<Array<{ prefijo: string }>>(`
-    SELECT prefijo
-    FROM configuracion_series_resolucion
-    WHERE id = 1
-    LIMIT 1
-  `)
-
-  const prefijo = filas[0]?.prefijo ?? '1530'
+  const configuracion = await apiJson<{ serie_resolucion?: string }>('/configuracion/inicial')
+  const prefijo = configuracion.serie_resolucion ?? '1530'
   validarSerie(prefijo)
   return prefijo
 }
@@ -67,23 +33,18 @@ export async function seleccionarSerieResolucion(
   },
 ): Promise<void> {
   validarSerie(prefijo)
-  await asegurarSeriesResoluciones()
-  const db = await obtenerBaseDatos()
-
-  await db.execute(`
-    UPDATE configuracion_series_resolucion
-    SET prefijo = $1, actualizado_en = CURRENT_TIMESTAMP
-    WHERE id = 1
-  `, [prefijo])
+  await apiJson('/configuracion/serie', {
+    method: 'PUT',
+    body: JSON.stringify({ prefijo }),
+  })
 
   const personaId = Number(contexto?.personaId ?? 0)
   const hojaVidaId = Number(contexto?.hojaVidaId ?? 0)
-
   if (personaId <= 0 || hojaVidaId <= 0) return
 
+  const db = await obtenerBaseDatos()
   const parametros: Array<string | number> = [personaId, hojaVidaId]
   let filtroFecha = ''
-
   if (contexto?.fechaDocumento) {
     filtroFecha = 'AND fecha_documento = $3'
     parametros.push(contexto.fechaDocumento)
@@ -102,7 +63,6 @@ export async function seleccionarSerieResolucion(
 
   const borradorId = borradores[0]?.id
   if (!borradorId) return
-
   await db.execute(`
     UPDATE resoluciones_documentales
     SET prefijo = $1, actualizada_en = CURRENT_TIMESTAMP
@@ -115,11 +75,9 @@ export async function obtenerSerieBorrador(
   hojaVidaId: number,
   fechaDocumento?: string | null,
 ): Promise<SerieResolucion | null> {
-  await asegurarSeriesResoluciones()
   const db = await obtenerBaseDatos()
   const parametros: Array<string | number> = [personaId, hojaVidaId]
   let filtroFecha = ''
-
   if (fechaDocumento) {
     filtroFecha = 'AND fecha_documento = $3'
     parametros.push(fechaDocumento)
