@@ -18,7 +18,11 @@ export function obtenerSesionWeb(): SesionWeb | null {
   if (!raw) return null
   try { return JSON.parse(raw) as SesionWeb } catch { return null }
 }
-export function limpiarToken(): void { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(SESSION_KEY) }
+export function limpiarToken(): void {
+  sessionStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(SESSION_KEY)
+  delete document.documentElement.dataset.hvRole
+}
 
 export async function cerrarSesionWeb(): Promise<void> {
   try {
