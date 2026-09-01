@@ -236,7 +236,8 @@ async fn asegurar_espejos_usuario(
     usuario_id: i64,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
     let globales = sqlx::query(
-        "SELECT id,nombre,anio,fecha_inicio,fecha_termino,estado FROM periodos_globales ORDER BY id"
+        "SELECT id,nombre,anio,DATE_FORMAT(fecha_inicio,'%Y-%m-%d') AS fecha_inicio,DATE_FORMAT(fecha_termino,'%Y-%m-%d') AS fecha_termino,estado \
+         FROM periodos_globales ORDER BY id"
     )
     .fetch_all(&state.pool)
     .await
@@ -318,7 +319,7 @@ async fn asegurar_espejos_usuario(
         };
 
         let vigencias = sqlx::query(
-            "SELECT codigo_regimen,nombre_regimen,fecha_inicio,fecha_termino,orden,activo \
+            "SELECT codigo_regimen,nombre_regimen,DATE_FORMAT(fecha_inicio,'%Y-%m-%d') AS fecha_inicio,DATE_FORMAT(fecha_termino,'%Y-%m-%d') AS fecha_termino,orden,activo \
              FROM vigencias_periodo_global WHERE periodo_global_id=? ORDER BY orden"
         )
         .bind(gid)
