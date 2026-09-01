@@ -29,6 +29,8 @@ import './styles/cambio-password.css'
 import './styles/ham-hapsem-container.css'
 /* Capa final: normaliza PrimeVue y estilos heredados sin alterar las hojas oficiales. */
 import './styles/ux-normalization.css'
+/* Experiencia principal: login, navegación y perfil del usuario. */
+import './styles/profile-and-login.css'
 
 const app = createApp(NewApp)
 
