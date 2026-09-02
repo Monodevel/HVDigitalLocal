@@ -1,0 +1,28 @@
+/* HVDigital responsive refactor
+   Estructuras que cambian realmente entre escritorio y móvil. */
+.hv-mobile-only{display:none!important}.hv-desktop-only{display:block}
+
+/* Notas nativas dentro del workspace, no como overlay inyectado. */
+.nt-overlay.nt-page{position:relative!important;inset:auto!important;z-index:auto!important;width:100%!important;min-height:100%!important;overflow:visible!important;background:transparent!important}
+.nt-page .nt-shell{max-width:1100px!important;min-height:auto!important;margin:0!important;padding:20px 24px 32px!important;gap:12px!important}
+.nt-page .nt-header{padding:0 0 14px!important;border:0!important;border-bottom:1px solid var(--hv-border)!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.nt-page .nt-header h1{font-size:1.35rem!important}.nt-page .nt-header p{font-size:.78rem!important}.nt-page .nt-summary article,.nt-page .nt-toolbar,.nt-page .nt-card{box-shadow:none!important;border-color:var(--hv-border)!important}.nt-page .nt-summary article{padding:12px!important}.nt-page .nt-summary article>i{width:36px!important;height:36px!important}.nt-page .nt-summary strong{font-size:1.05rem!important}.nt-page .nt-card{border-left-width:3px!important;padding:12px 14px!important}.nt-page .nt-card-main h2{font-size:.9rem!important}.nt-page .nt-card-main p{font-size:.78rem!important}.nt-page .nt-meta{font-size:.7rem!important}
+
+/* Lista móvil de Hojas de Vida. */
+.hv-person-list{display:grid;gap:8px}.hv-person-card{width:100%;min-height:78px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hv-border);border-radius:9px;background:#fff;color:var(--hv-text);text-align:left;box-shadow:none}.hv-person-card:active{background:#f8fbff}.hv-person-avatar{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:var(--hv-primary-soft);color:var(--hv-primary);font-size:.78rem;font-weight:800;text-transform:uppercase}.hv-person-main{min-width:0;display:grid;gap:3px}.hv-person-main b{font-size:.79rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hv-person-main small{font-size:.65rem;color:var(--hv-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hv-person-meta{display:flex;align-items:center;justify-content:space-between;gap:8px}.hv-person-meta strong{font-size:.67rem;color:#475569}.hv-person-card>.pi-chevron-right{font-size:.72rem;color:#94a3b8}.hv-mobile-search{display:grid;grid-template-columns:minmax(0,1fr) 40px;gap:7px;margin-bottom:7px}.hv-mobile-search .hv-search-control{min-width:0}.hv-mobile-filters{display:grid;gap:7px;margin-bottom:8px;padding:8px;border:1px solid var(--hv-border);border-radius:9px;background:#fff}
+
+@media(max-width:760px){
+  .hv-desktop-only{display:none!important}.hv-mobile-only{display:grid!important}
+  .hv-page-heading-compact>div:first-child p{margin-top:2px!important}
+  .hv-person-list{padding-bottom:4px}
+  .nt-page .nt-shell{padding:9px!important}
+  .nt-page .nt-header{display:flex!important;align-items:center!important;gap:8px!important;padding-bottom:8px!important}
+  .nt-page .nt-header>div:first-child{min-width:0}.nt-page .nt-header h1{font-size:1.03rem!important}.nt-page .nt-header p{display:none!important}.nt-page .nt-eyebrow{display:none!important}
+  .nt-page .nt-header-actions{margin-left:auto!important;gap:5px!important}.nt-page .nt-header-actions .nt-button{min-width:40px!important;min-height:40px!important;padding:0 9px!important;font-size:0!important}.nt-page .nt-header-actions .nt-button i{font-size:.9rem!important;margin:0!important}
+  .nt-page .nt-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}.nt-page .nt-summary article{gap:7px!important;padding:8px!important;border-radius:8px!important}.nt-page .nt-summary article>i{width:30px!important;height:30px!important;font-size:.8rem!important}.nt-page .nt-summary span{font-size:.6rem!important}.nt-page .nt-summary strong{font-size:.9rem!important}
+  .nt-page .nt-toolbar{grid-template-columns:1fr 1fr!important;gap:6px!important;padding:6px!important}.nt-page .nt-search{grid-column:1/-1!important}.nt-page .nt-toolbar input,.nt-page .nt-toolbar select{min-height:40px!important;font-size:.72rem!important}
+  .nt-page .nt-card{grid-template-columns:minmax(0,1fr) auto!important;gap:7px!important;padding:9px 10px!important;border-radius:8px!important}.nt-page .nt-card-main h2{margin-top:5px!important;font-size:.8rem!important}.nt-page .nt-card-main p{font-size:.7rem!important;line-height:1.35!important}.nt-page .nt-meta{margin-top:6px!important;font-size:.62rem!important}.nt-page .nt-card-actions{display:grid!important;gap:4px!important}.nt-page .nt-card-actions button{width:32px!important;height:32px!important}
+  .nt-page .nt-modal-backdrop{padding:6px!important}.nt-page .nt-form{max-height:calc(100dvh - 12px)!important;border-radius:9px!important}.nt-page .nt-form-grid{gap:8px!important;padding:10px!important}.nt-page .nt-form header,.nt-page .nt-form footer{padding:9px 10px!important}.nt-page .nt-form footer{position:sticky;bottom:0;background:#fff}.nt-page .nt-form footer .nt-button{flex:1}
+}
+
+@media(min-width:761px){.hv-mobile-only{display:none!important}.hv-desktop-only{display:block!important}}
