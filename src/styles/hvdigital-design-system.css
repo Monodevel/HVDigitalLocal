@@ -1,4 +1,4 @@
-/* HVDigital Design System v1.1
+/* HVDigital Design System v1.2
    Principio: información esencial, jerarquía clara, acciones previsibles.
    Esta capa es deliberadamente no destructiva: no modifica hojas/documentos oficiales. */
 :root{
@@ -28,20 +28,20 @@ body{background:var(--hv-page);color:var(--hv-text)}
 .hv-module-host:has(:where(.sheet,.institutional-sheet,.official-sheet,.document-sheet)){background:#e9edf3!important;padding:16px!important}.hv-module-host :where(.sheet,.institutional-sheet,.official-sheet,.document-sheet){box-shadow:0 2px 12px rgba(15,23,42,.09)!important}
 .hv-global-statusbar{min-height:28px!important;font-size:.65rem!important;color:#7c8798}.hv-statusbar-app{left:220px}
 @media(max-width:1024px){.hv-app-shell{grid-template-columns:190px minmax(0,1fr)}.hv-statusbar-app{left:190px}.hv-content{padding:16px}.hv-settings-grid{grid-template-columns:1fr 1fr}.p-datatable-thead>tr>th,.p-datatable-tbody>tr>td{padding-left:10px!important;padding-right:10px!important}}
-/* Móvil: navegación mínima, perfil siempre accesible y máxima superficie útil */
+/* Móvil: navegación inferior estable y sin solapamientos */
 @media(max-width:760px){
-  .hv-app-shell,.hv-app-shell-with-status{display:block!important;padding-bottom:60px!important}
+  .hv-app-shell,.hv-app-shell-with-status{display:block!important;padding-bottom:66px!important}
   .hv-workspace{min-height:100dvh!important;padding-bottom:0!important}
-  .hv-sidebar{height:56px!important;min-height:56px!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;background:rgba(255,255,255,.985)!important;border-top:1px solid var(--hv-border)!important;box-shadow:0 -3px 14px rgba(15,23,42,.05)!important}
+  .hv-sidebar{position:fixed!important;z-index:1100!important;height:62px!important;min-height:62px!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;padding:0!important;background:rgba(255,255,255,.985)!important;border:0!important;border-top:1px solid var(--hv-border)!important;box-shadow:0 -3px 14px rgba(15,23,42,.06)!important;overflow:hidden!important}
   .hv-sidebar-brand{display:none!important}
-  .hv-sidebar-menu{display:flex!important;align-items:stretch!important;gap:0!important;width:100%!important;padding:0!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x proximity;scrollbar-width:none}
-  .hv-sidebar-menu::-webkit-scrollbar{display:none}
+  .hv-sidebar-menu{display:grid!important;grid-auto-flow:column!important;grid-auto-columns:minmax(72px,1fr)!important;align-items:stretch!important;justify-content:start!important;gap:0!important;width:100%!important;height:62px!important;min-height:62px!important;padding:0!important;margin:0!important;overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior-x:contain!important;scroll-snap-type:x proximity!important;scrollbar-width:none!important;-webkit-overflow-scrolling:touch!important}
+  .hv-sidebar-menu::-webkit-scrollbar{display:none!important}
   .hv-sidebar-menu-section{display:none!important}
-  .hv-sidebar-item{flex:1 0 64px!important;min-width:64px!important;max-width:82px!important;height:56px!important;min-height:56px!important;padding:5px 4px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;border-radius:0!important;color:#64748b!important;scroll-snap-align:start}
-  .hv-sidebar-item-active{color:var(--hv-primary)!important;background:transparent!important;box-shadow:inset 0 2px 0 var(--hv-primary)!important}
-  .hv-sidebar-item i{font-size:.95rem!important;width:auto!important}
-  .hv-sidebar-item span{font-size:.54rem!important;line-height:1.05!important;max-width:72px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
-  /* Perfil y salida pasan al encabezado móvil: dejan de desaparecer. */
+  .hv-sidebar-item{position:relative!important;box-sizing:border-box!important;width:100%!important;min-width:72px!important;max-width:none!important;height:62px!important;min-height:62px!important;margin:0!important;padding:7px 6px 6px!important;display:grid!important;grid-template-rows:22px 14px!important;align-content:center!important;justify-items:center!important;align-items:center!important;gap:2px!important;border:0!important;border-radius:0!important;color:#64748b!important;background:transparent!important;scroll-snap-align:start!important;overflow:hidden!important}
+  .hv-sidebar-item-active{color:var(--hv-primary)!important;background:#f8fbff!important;box-shadow:inset 0 2px 0 var(--hv-primary)!important}
+  .hv-sidebar-item i{display:block!important;width:22px!important;height:22px!important;line-height:22px!important;margin:0!important;padding:0!important;font-size:1rem!important;text-align:center!important;overflow:visible!important}
+  .hv-sidebar-item span{display:block!important;width:100%!important;max-width:68px!important;height:14px!important;margin:0!important;padding:0!important;font-size:.54rem!important;line-height:14px!important;text-align:center!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+  /* Perfil y salida permanecen en el encabezado móvil. */
   .hv-sidebar-context{display:flex!important;position:fixed!important;z-index:1200!important;top:7px!important;right:8px!important;margin:0!important;gap:5px!important;align-items:center!important;width:auto!important;height:40px!important;background:transparent!important;border:0!important;pointer-events:auto!important}
   .hv-sidebar-profile-button{display:grid!important;place-items:center!important;width:36px!important;height:36px!important;min-height:36px!important;padding:0!important;border:0!important;border-radius:50%!important;background:#e8efff!important;color:var(--hv-primary)!important;box-shadow:none!important}
   .hv-sidebar-profile-button .hv-user-avatar{width:36px!important;height:36px!important;background:#e8efff!important;color:var(--hv-primary)!important;font-size:.68rem!important}
@@ -58,12 +58,14 @@ body{background:var(--hv-page);color:var(--hv-text)}
   .hv-settings-grid{grid-template-columns:1fr}.hv-settings-tile{min-height:68px!important;padding:9px 10px!important}.hv-settings-summary>div{padding:8px 10px}.hv-settings-section{gap:8px!important}
   .p-card-body{padding:12px!important}.hv-profile-form-grid{gap:9px!important}.hv-profile-actions{gap:8px!important;padding-top:10px!important}
   .hv-module-host:has(:where(.sheet,.institutional-sheet,.official-sheet,.document-sheet)){padding:6px!important;overflow-x:auto!important}
-  .hv-floating-actions,.hc2-floating-actions,.ham-floating-actions,.hapsem-floating-actions,[class*="floating-actions"]{bottom:62px!important}
+  .hv-floating-actions,.hc2-floating-actions,.ham-floating-actions,.hapsem-floating-actions,[class*="floating-actions"]{bottom:68px!important}
   .hv-global-statusbar.hv-statusbar-app{display:none!important}
 }
 @media(max-width:480px){
   .hv-content{padding:7px!important}.hv-page-heading h1{font-size:1.02rem!important}.hv-settings-summary{grid-template-columns:1fr!important}.p-dialog{border-radius:10px!important}
-  .hv-sidebar-item{flex-basis:58px!important;min-width:58px!important;max-width:70px!important}.hv-sidebar-item span{font-size:.5rem!important;max-width:62px!important}
+  .hv-sidebar-menu{grid-auto-columns:68px!important}
+  .hv-sidebar-item{min-width:68px!important;padding-left:4px!important;padding-right:4px!important}
+  .hv-sidebar-item span{max-width:62px!important;font-size:.5rem!important}
   .hv-topbar{padding-right:88px!important}
 }
 @media print{.hv-module-host:has(:where(.sheet,.institutional-sheet,.official-sheet,.document-sheet)){padding:0!important;background:#fff!important}}
