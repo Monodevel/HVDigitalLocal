@@ -11,6 +11,7 @@ export type PeriodoUi = {
 
 export type CalificadoUi = {
   id: number
+  personaId: number
   expedienteId: number
   hojaVidaId: number | null
   grado: string
@@ -75,6 +76,7 @@ export async function listarCalificadosUi(periodoId: number): Promise<Calificado
 
   return filas.map(fila => ({
     id: Number(fila.persona_id),
+    personaId: Number(fila.persona_id),
     expedienteId: Number(fila.expediente_id),
     hojaVidaId: fila.hoja_vida_id == null ? null : Number(fila.hoja_vida_id),
     grado: fila.grado || 'Sin grado',
