@@ -7,7 +7,6 @@ import { habilitarNotificacionesDeInterfaz } from './services/notificacionesNati
 import { habilitarMenuNativo } from './services/menuNativo'
 import { habilitarFotografiasEnExpediente } from './services/fotografiaExpedienteUi'
 import { habilitarGestionPeriodos } from './services/periodosUi'
-import { habilitarNotasTareas } from './services/notasTareasUi'
 import { habilitarSeriesResoluciones } from './services/seriesResolucionesUi'
 import { habilitarResolucionesExternas } from './services/resolucionesExternasUi'
 import { habilitarCambioPasswordConfiguracion } from './services/cambioPasswordUi'
@@ -27,11 +26,8 @@ import './styles/resolution-series.css'
 import './styles/resoluciones-externas.css'
 import './styles/cambio-password.css'
 import './styles/ham-hapsem-container.css'
-/* Compatibilidad y normalización de componentes existentes. */
 import './styles/ux-normalization.css'
-/* Login y perfil. */
 import './styles/profile-and-login.css'
-/* Design System HVDigital: capa visual final, no destructiva. */
 import './styles/hvdigital-design-system.css'
 
 const app = createApp(NewApp)
@@ -68,4 +64,3 @@ void habilitarResolucionesExternas()
 habilitarCambioPasswordConfiguracion()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
-habilitarNotasTareas()
