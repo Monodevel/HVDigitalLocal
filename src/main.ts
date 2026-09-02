@@ -9,7 +9,6 @@ import { habilitarFotografiasEnExpediente } from './services/fotografiaExpedient
 import { habilitarGestionPeriodos } from './services/periodosUi'
 import { habilitarSeriesResoluciones } from './services/seriesResolucionesUi'
 import { habilitarResolucionesExternas } from './services/resolucionesExternasUi'
-import { habilitarCambioPasswordConfiguracion } from './services/cambioPasswordUi'
 
 import 'primeicons/primeicons.css'
 import './styles/hvdigital-theme.css'
@@ -63,6 +62,5 @@ void habilitarMenuNativo()
 void habilitarGestionPeriodos()
 void habilitarSeriesResoluciones()
 void habilitarResolucionesExternas()
-habilitarCambioPasswordConfiguracion()
 habilitarNotificacionesDeInterfaz()
 habilitarFotografiasEnExpediente()
