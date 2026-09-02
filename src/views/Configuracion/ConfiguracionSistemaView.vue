@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
-import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import { obtenerEstadoConfiguracionInicial } from '../../services/configuracionInicial'
