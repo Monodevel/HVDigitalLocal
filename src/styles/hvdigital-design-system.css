@@ -1,0 +1,44 @@
+/* HVDigital Design System v1
+   Principio: información esencial, jerarquía clara, acciones previsibles.
+   Esta capa es deliberadamente no destructiva: no modifica hojas/documentos oficiales. */
+:root{
+  --hv-page:#f7f9fc;--hv-surface:#fff;--hv-surface-soft:#f8fafc;--hv-text:#14213d;--hv-muted:#64748b;
+  --hv-border:#e5eaf1;--hv-primary:#1d4ed8;--hv-primary-hover:#1e40af;--hv-primary-dark:#071a38;
+  --hv-primary-dark-2:#0a2347;--hv-primary-soft:#eff6ff;--hv-success:#16a34a;--hv-warning:#f59e0b;
+  --hv-danger:#ef4444;--hv-radius-sm:7px;--hv-radius-md:10px;--hv-radius-lg:12px;
+  --hv-shadow-sm:0 1px 3px rgba(15,23,42,.04);--hv-shadow-md:0 8px 28px rgba(15,23,42,.08);
+  --hv-space-1:4px;--hv-space-2:8px;--hv-space-3:12px;--hv-space-4:16px;--hv-space-5:24px;--hv-space-6:32px;
+}
+body{background:var(--hv-page);color:var(--hv-text)}
+/* Shell: menos decoración, más superficie útil */
+.hv-app-shell{grid-template-columns:220px minmax(0,1fr)}
+.hv-sidebar{background:var(--hv-primary-dark);border-right:1px solid rgba(255,255,255,.06)}
+.hv-sidebar-brand{min-height:64px;padding:12px 14px;border-bottom:0}.hv-brand-mark-small{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.09)}
+.hv-sidebar-brand strong{font-size:.92rem}.hv-sidebar-brand small{font-size:.68rem;color:#8fa5c1}
+.hv-sidebar-menu{gap:2px;padding:10px}.hv-sidebar-menu-section{margin:12px 8px 5px!important;color:#7188a7!important;font-size:.61rem!important;letter-spacing:.08em!important;font-weight:700!important;text-transform:uppercase}
+.hv-sidebar-item{min-height:38px;padding:8px 10px;border-radius:7px;color:#c8d4e4;font-size:.78rem}.hv-sidebar-item i{font-size:.86rem}.hv-sidebar-item-active{background:var(--hv-primary);box-shadow:none}.hv-sidebar-item:hover{background:rgba(255,255,255,.07);transform:none}
+.hv-sidebar-context{margin-top:auto}.hv-sidebar-profile-button{border-top:1px solid rgba(255,255,255,.07)!important}.hv-sidebar-logout{font-size:.75rem}
+.hv-workspace{background:var(--hv-page)}.hv-topbar{min-height:58px;padding:0 20px;border-color:var(--hv-border);box-shadow:none}.hv-topbar>div:first-child strong{font-size:.86rem}.hv-topbar>div:first-child small{font-size:.68rem}.hv-content{padding:20px 24px}
+/* Jerarquía */
+.hv-page-heading{margin-bottom:18px}.hv-page-heading h1{font-size:1.45rem;letter-spacing:-.025em}.hv-page-heading p{margin-top:4px;font-size:.78rem;line-height:1.45}.hv-eyebrow{font-size:.63rem;letter-spacing:.08em}
+/* Controles: 40px escritorio, estados claros */
+.p-button{min-height:40px!important;border-radius:7px!important;font-size:.78rem!important;font-weight:650!important}.p-inputtext,.p-select,.p-password-input,.p-textarea{border-color:#dce3ec!important;border-radius:7px!important;font-size:.78rem!important;box-shadow:none!important}.p-inputtext:hover,.p-select:hover{border-color:#b9c6d8!important}.p-inputtext:focus,.p-select.p-focus,.p-password input:focus,.p-textarea:focus{border-color:var(--hv-primary)!important;box-shadow:0 0 0 3px rgba(29,78,216,.09)!important}
+.p-card{box-shadow:none!important;border-color:var(--hv-border)!important;border-radius:10px!important}.p-card-body{padding:16px}.p-tag{font-size:.64rem!important;font-weight:650!important;border-radius:999px!important;padding:.2rem .48rem!important}
+/* Listados: una sola superficie, filtros compactos, tabla escaneable */
+.hv-filter-bar,.hv-filter-panel{gap:8px!important;margin-bottom:10px!important;padding:10px!important;border:1px solid var(--hv-border)!important;border-radius:9px!important;background:#fff!important;box-shadow:none!important}.hv-search-control{min-width:240px}.hv-table-card{overflow:hidden;border-radius:10px!important}.hv-table-card .p-card-body,.hv-table-card .p-card-content{padding:0!important}.p-datatable-thead>tr>th{height:38px;padding:8px 12px!important;background:#fafbfd!important;border-color:#edf0f4!important;color:#667085!important;font-size:.65rem!important;font-weight:700!important;text-transform:uppercase;letter-spacing:.035em}.p-datatable-tbody>tr>td{height:48px;padding:8px 12px!important;border-color:#eef1f5!important;font-size:.76rem!important}.p-datatable-tbody>tr:hover{background:#f8fbff!important}.p-paginator{min-height:46px;border-top:1px solid #eef1f5!important}
+/* Períodos */
+.hv-periods-workspace{max-width:1000px}.hv-periods-workspace .hv-period-list{gap:8px}.hv-periods-workspace .hv-period-row{box-shadow:none!important;border-radius:9px!important}.hv-periods-workspace .hv-period-row:hover{transform:none!important;border-color:#cbd6e4!important}.hv-periods-workspace .hv-period-row-content{padding:2px}.hv-periods-workspace .hv-period-row-content p{font-size:.75rem}
+/* Configuración: menos aspecto dashboard, más menú de preferencias */
+.hv-settings-center{max-width:1040px}.hv-settings-summary{border-radius:9px}.hv-settings-summary>div{padding:12px 14px}.hv-settings-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.hv-settings-tile{min-height:88px!important;grid-template-columns:38px 1fr auto!important;gap:10px!important;padding:12px 14px!important;border-radius:9px!important;box-shadow:none!important}.hv-settings-tile:hover{transform:none!important;background:#fbfdff!important;border-color:#b9c9df!important;box-shadow:none!important}.hv-settings-tile-icon{width:36px;height:36px;border-radius:8px;font-size:.9rem}.hv-settings-tile p{font-size:.72rem}.hv-settings-section{max-width:900px}
+/* Perfil y formularios */
+.hv-profile-form-grid{gap:14px!important}.hv-field label{font-size:.72rem!important;font-weight:650!important;color:#475569!important}.hv-profile-actions{padding-top:14px!important;border-top:1px solid var(--hv-border)}
+/* Documentos oficiales: sólo contenedor/scroll. Nunca se remaquetan internamente. */
+.hv-module-host:has(:where(.sheet,.institutional-sheet,.official-sheet,.document-sheet)){background:#e9edf3!important;padding:16px!important}.hv-module-host :where(.sheet,.institutional-sheet,.official-sheet,.document-sheet){box-shadow:0 2px 12px rgba(15,23,42,.09)!important}
+/* Statusbar discreta */
+.hv-global-statusbar{min-height:28px!important;font-size:.65rem!important;color:#7c8798}.hv-statusbar-app{left:220px}
+/* Tablet */
+@media(max-width:1024px){.hv-app-shell{grid-template-columns:190px minmax(0,1fr)}.hv-statusbar-app{left:190px}.hv-content{padding:16px}.hv-settings-grid{grid-template-columns:1fr 1fr}.p-datatable-thead>tr>th,.p-datatable-tbody>tr>td{padding-left:10px!important;padding-right:10px!important}}
+/* Móvil: navegación inferior y contenido tipo lista */
+@media(max-width:760px){.hv-app-shell,.hv-app-shell-with-status{display:block!important;padding-bottom:68px}.hv-sidebar{height:64px!important;min-height:64px!important;background:rgba(255,255,255,.98)!important;border-top:1px solid var(--hv-border)!important;box-shadow:0 -4px 16px rgba(15,23,42,.06)!important}.hv-sidebar-item{color:#64748b!important}.hv-sidebar-item-active{color:var(--hv-primary)!important;background:transparent!important}.hv-sidebar-item i{font-size:1rem!important}.hv-sidebar-item span{font-size:.58rem}.hv-topbar{min-height:54px!important;padding:0 12px!important}.hv-content{padding:12px!important}.hv-page-heading{margin-bottom:12px!important}.hv-page-heading h1{font-size:1.2rem!important}.hv-page-heading p{font-size:.72rem!important}.p-button{min-height:44px!important}.p-inputtext,.p-select,.p-password-input{min-height:44px!important}.hv-filter-bar,.hv-filter-panel{padding:8px!important}.hv-table-card{border:0!important;background:transparent!important}.hv-table-card .p-datatable-table-container{border:1px solid var(--hv-border);border-radius:9px;background:#fff}.p-datatable-thead>tr>th,.p-datatable-tbody>tr>td{white-space:nowrap}.hv-settings-grid{grid-template-columns:1fr}.hv-settings-tile{min-height:76px!important}.hv-settings-summary>div{padding:10px 12px}.hv-module-host:has(:where(.sheet,.institutional-sheet,.official-sheet,.document-sheet)){padding:8px!important;overflow-x:auto!important}.hv-floating-actions,.hc2-floating-actions,.ham-floating-actions,.hapsem-floating-actions,[class*="floating-actions"]{bottom:72px!important}.hv-global-statusbar.hv-statusbar-app{display:none!important}}
+@media(max-width:480px){.hv-content{padding:10px!important}.hv-page-heading h1{font-size:1.12rem!important}.hv-settings-summary{grid-template-columns:1fr!important}.p-dialog{border-radius:10px!important}}
+@media print{.hv-module-host:has(:where(.sheet,.institutional-sheet,.official-sheet,.document-sheet)){padding:0!important;background:#fff!important}}
