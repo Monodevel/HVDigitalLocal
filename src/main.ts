@@ -27,10 +27,12 @@ import './styles/resolution-series.css'
 import './styles/resoluciones-externas.css'
 import './styles/cambio-password.css'
 import './styles/ham-hapsem-container.css'
-/* Capa final: normaliza PrimeVue y estilos heredados sin alterar las hojas oficiales. */
+/* Compatibilidad y normalización de componentes existentes. */
 import './styles/ux-normalization.css'
-/* Experiencia principal: login, navegación y perfil del usuario. */
+/* Login y perfil. */
 import './styles/profile-and-login.css'
+/* Design System HVDigital: capa visual final, no destructiva. */
+import './styles/hvdigital-design-system.css'
 
 const app = createApp(NewApp)
 
