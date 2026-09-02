@@ -1,0 +1,51 @@
+/* Mobile navigation v2 — estructura dedicada, no reutiliza el sidebar desktop. */
+.hv-mobile-nav,.hv-mobile-user-menu,.hv-mobile-more-sheet,.hv-mobile-user-trigger,.hv-mobile-back{display:none}
+
+@media(max-width:760px){
+  .hv-app-shell,.hv-app-shell-with-status{padding-bottom:68px!important}
+
+  /* El sidebar completo queda reservado a escritorio/tablet. */
+  .hv-sidebar{display:none!important}
+
+  .hv-topbar{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important;min-height:54px!important;padding:6px 10px!important}
+  .hv-topbar-copy{min-width:0!important;display:grid!important;gap:1px!important}
+  .hv-topbar-copy strong{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:.8rem!important}
+  .hv-topbar-copy small{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:.61rem!important;color:var(--hv-muted)!important}
+
+  .hv-mobile-back{display:grid!important;place-items:center!important;width:38px!important;height:38px!important;min-width:38px!important;padding:0!important;border:0!important;border-radius:10px!important;background:transparent!important;color:#475569!important;font-size:1rem!important}
+  .hv-mobile-user-trigger{display:grid!important;place-items:center!important;width:38px!important;height:38px!important;min-width:38px!important;padding:0!important;border:0!important;border-radius:50%!important;background:#e8efff!important;color:var(--hv-primary)!important;font-weight:800!important;font-size:.68rem!important}
+
+  /* Barra inferior: siempre cuatro destinos, sin scroll y sin colisiones. */
+  .hv-mobile-nav{display:grid!important;position:fixed!important;z-index:1250!important;left:0!important;right:0!important;bottom:0!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;height:64px!important;padding:0 env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)!important;background:rgba(255,255,255,.985)!important;border-top:1px solid var(--hv-border)!important;box-shadow:0 -3px 16px rgba(15,23,42,.07)!important;backdrop-filter:blur(12px)!important}
+  .hv-mobile-nav button{position:relative!important;display:grid!important;grid-template-rows:24px 15px!important;align-content:center!important;justify-items:center!important;gap:2px!important;min-width:0!important;height:64px!important;padding:6px 4px!important;border:0!important;background:transparent!important;color:#64748b!important;font:inherit!important}
+  .hv-mobile-nav button i{font-size:1.05rem!important;line-height:24px!important}
+  .hv-mobile-nav button span{max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;font-size:.58rem!important;line-height:15px!important}
+  .hv-mobile-nav button.active{color:var(--hv-primary)!important}
+  .hv-mobile-nav button.active::before{content:"";position:absolute;top:0;left:24%;right:24%;height:2px;border-radius:0 0 3px 3px;background:var(--hv-primary)}
+
+  /* Menú de usuario desde avatar superior. */
+  .hv-mobile-popover-backdrop{display:block!important;position:fixed!important;z-index:1400!important;inset:0!important;background:rgba(15,23,42,.18)!important}
+  .hv-mobile-user-menu{display:block!important;position:absolute!important;top:58px!important;right:10px!important;width:min(300px,calc(100vw - 20px))!important;padding:8px!important;border:1px solid var(--hv-border)!important;border-radius:14px!important;background:#fff!important;box-shadow:0 18px 50px rgba(15,23,42,.2)!important}
+  .hv-mobile-user-menu header{display:flex!important;align-items:center!important;gap:10px!important;padding:9px 8px 12px!important;border-bottom:1px solid var(--hv-border)!important}
+  .hv-mobile-user-avatar{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;background:#e8efff;color:var(--hv-primary);font-size:.7rem;font-weight:800}
+  .hv-mobile-user-menu header div{min-width:0;display:grid;gap:2px}.hv-mobile-user-menu header strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem}.hv-mobile-user-menu header small{color:var(--hv-muted);font-size:.65rem}
+  .hv-mobile-user-menu>button{width:100%!important;min-height:44px!important;display:grid!important;grid-template-columns:22px minmax(0,1fr) 18px!important;align-items:center!important;gap:8px!important;padding:8px 10px!important;border:0!important;border-radius:9px!important;background:transparent!important;color:#334155!important;text-align:left!important;font:inherit!important;font-size:.76rem!important}
+  .hv-mobile-user-menu>button:hover{background:#f8fafc!important}.hv-mobile-user-menu>button>i:last-child{font-size:.68rem!important;color:#94a3b8!important}.hv-mobile-user-menu>button.danger{margin-top:4px!important;color:#b42318!important;border-top:1px solid #f1f5f9!important;border-radius:0 0 9px 9px!important}.hv-mobile-user-menu>button.danger>i:last-child{display:none!important}
+
+  /* Bottom sheet de instrumentos secundarios. */
+  .hv-mobile-sheet-backdrop{display:flex!important;position:fixed!important;z-index:1450!important;inset:0!important;align-items:flex-end!important;background:rgba(15,23,42,.36)!important;backdrop-filter:blur(2px)!important}
+  .hv-mobile-more-sheet{display:block!important;width:100%!important;max-height:min(72dvh,560px)!important;padding:10px 12px calc(14px + env(safe-area-inset-bottom,0))!important;border-radius:18px 18px 0 0!important;background:#fff!important;box-shadow:0 -16px 50px rgba(15,23,42,.22)!important;overflow:auto!important}
+  .hv-mobile-more-sheet>header{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;padding:6px 4px 12px!important}
+  .hv-mobile-more-sheet>header>div{min-width:0;display:grid;gap:2px}.hv-mobile-more-sheet>header strong{font-size:.9rem}.hv-mobile-more-sheet>header small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--hv-muted);font-size:.64rem}.hv-mobile-more-sheet>header>button{width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:50%;background:#f1f5f9;color:#64748b}
+  .hv-mobile-more-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+  .hv-mobile-more-grid button{min-width:0!important;min-height:76px!important;display:grid!important;place-items:center!important;align-content:center!important;gap:7px!important;padding:10px 6px!important;border:1px solid var(--hv-border)!important;border-radius:11px!important;background:#fff!important;color:#475569!important;font:inherit!important}
+  .hv-mobile-more-grid button i{font-size:1.12rem!important}.hv-mobile-more-grid button span{font-size:.65rem!important;font-weight:650!important}.hv-mobile-more-grid button.active{border-color:#a9c3ff!important;background:#eff6ff!important;color:var(--hv-primary)!important}
+
+  /* Los flotantes quedan por sobre la nueva navegación. */
+  .hv-floating-actions,.hc2-floating-actions,.ham-floating-actions,.hapsem-floating-actions,[class*="floating-actions"]{bottom:72px!important}
+}
+
+@media(max-width:420px){
+  .hv-mobile-more-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .hv-mobile-nav button span{font-size:.55rem!important}
+}
