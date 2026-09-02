@@ -29,6 +29,7 @@ import './styles/ham-hapsem-container.css'
 import './styles/ux-normalization.css'
 import './styles/profile-and-login.css'
 import './styles/hvdigital-design-system.css'
+import './styles/hvdigital-responsive-refactor.css'
 
 const app = createApp(NewApp)
 
